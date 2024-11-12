@@ -263,7 +263,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 `Stripecord` emits various events to notify you when specific actions occur:
 
 - **``**: When a new subscription is created.
-- **`subscriptionUpdated`**: When a subscription is updated.
+- **`subscriptionUpdate`**: When a subscription is updated.
 - **`subscriptionCancel`**: When a subscription is canceled.
 - **`subscriptionDelete`**: When a subscription is deleted.
 - **`subscriptionTierChange`**: When a subscription's tier is changed.

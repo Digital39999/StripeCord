@@ -237,7 +237,7 @@ export default class StripeManager {
 				} as const;
 
 				this.manager.emit(`${subscriptionType}SubscriptionUpdated`, eventData);
-				this.manager.emit('subscriptionUpdated', eventData);
+				this.manager.emit('subscriptionUpdate', eventData);
 
 				break;
 			}

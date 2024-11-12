@@ -85,7 +85,7 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionCreated`, eventData);
+							this.manager.emit(`${subscriptionType}SubscriptionCreate`, eventData);
 							this.manager.emit('subscriptionCreate', eventData);
 							break;
 						}
@@ -149,7 +149,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionCancelled`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionCancel`, eventData);
 					this.manager.emit('subscriptionCancel', eventData);
 				}
 

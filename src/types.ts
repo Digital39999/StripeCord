@@ -80,29 +80,29 @@ export type GetAllSubscriptionsQuery = {
 export type GetAllInvoicesQuery = GetAllSubscriptionsQuery;
 
 export type ManagerEvents = {
-	'subscriptionCreated': [data: SubscriptionCreateData];
-	'subscriptionCancelled': [data: SubscriptionCancelData];
-	'subscriptionDeleted': [data: SubscriptionDeleteData];
-	'subscriptionUpdated': [data: SubscriptionUpdateData];
-	'subscriptionTierChanged': [data: SubscriptionTierChangeData];
-	'subscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
-	'subscriptionRenewed': [data: SubscriptionRenewData];
+	'subscriptionCreate': [data: SubscriptionCreateData];
+	'subscriptionCancel': [data: SubscriptionCancelData];
+	'subscriptionDelete': [data: SubscriptionDeleteData];
+	'subscriptionUpdate': [data: SubscriptionUpdateData];
+	'subscriptionTierChange': [data: SubscriptionTierChangeData];
+	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'subscriptionRenew': [data: SubscriptionRenewData];
 
-	'guildSubscriptionCreated': [data: SubscriptionCreateData];
-	'guildSubscriptionCancelled': [data: SubscriptionCancelData];
-	'guildSubscriptionDeleted': [data: SubscriptionDeleteData];
-	'guildSubscriptionUpdated': [data: SubscriptionUpdateData];
-	'guildSubscriptionTierChanged': [data: SubscriptionTierChangeData];
-	'guildSubscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
-	'guildSubscriptionRenewed': [data: SubscriptionRenewData];
+	'guildSubscriptionCreate': [data: SubscriptionCreateData];
+	'guildSubscriptionCancel': [data: SubscriptionCancelData];
+	'guildSubscriptionDelete': [data: SubscriptionDeleteData];
+	'guildSubscriptionUpdate': [data: SubscriptionUpdateData];
+	'guildSubscriptionTierChange': [data: SubscriptionTierChangeData];
+	'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'guildSubscriptionRenew': [data: SubscriptionRenewData];
 
-	'userSubscriptionCreated': [data: SubscriptionCreateData];
-	'userSubscriptionCancelled': [data: SubscriptionCancelData];
-	'userSubscriptionDeleted': [data: SubscriptionDeleteData];
-	'userSubscriptionUpdated': [data: SubscriptionUpdateData];
-	'userSubscriptionTierChanged': [data: SubscriptionTierChangeData];
-	'userSubscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
-	'userSubscriptionRenewed': [data: SubscriptionRenewData];
+	'userSubscriptionCreate': [data: SubscriptionCreateData];
+	'userSubscriptionCancel': [data: SubscriptionCancelData];
+	'userSubscriptionDelete': [data: SubscriptionDeleteData];
+	'userSubscriptionUpdate': [data: SubscriptionUpdateData];
+	'userSubscriptionTierChange': [data: SubscriptionTierChangeData];
+	'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'userSubscriptionRenew': [data: SubscriptionRenewData];
 
 	'unprocessedWebhook': [data: unknown];
 	'paymentFailed': [data: PaymentFailedData];

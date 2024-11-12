@@ -86,7 +86,7 @@ export default class StripeManager {
 							} as const;
 
 							this.manager.emit(`${subscriptionType}SubscriptionCreated`, eventData);
-							this.manager.emit('subscriptionCreated', eventData);
+							this.manager.emit('subscriptionCreate', eventData);
 							break;
 						}
 						case 'subscription_cycle': {
@@ -105,8 +105,8 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionRenewed`, eventData);
-							this.manager.emit('subscriptionRenewed', eventData);
+							this.manager.emit(`${subscriptionType}SubscriptionRenew`, eventData);
+							this.manager.emit('subscriptionRenew', eventData);
 							break;
 						}
 					}
@@ -150,7 +150,7 @@ export default class StripeManager {
 					} as const;
 
 					this.manager.emit(`${subscriptionType}SubscriptionCancelled`, eventData);
-					this.manager.emit('subscriptionCancelled', eventData);
+					this.manager.emit('subscriptionCancel', eventData);
 				}
 
 				const downgradeOrUpgrade = await this.tiers.checkIfTierChange(subscription.data.items.data, subscription.previous.items?.data || []);
@@ -172,8 +172,8 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionTierChanged`, eventData);
-					this.manager.emit('subscriptionTierChanged', eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionTierChange`, eventData);
+					this.manager.emit('subscriptionTierChange', eventData);
 				}
 
 				const addonsChange = await this.addons.checkIfAddonChange(subscription.data.items.data, subscription.previous.items?.data || [], stripeAddons);
@@ -217,8 +217,8 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdated`, eventData);
-					this.manager.emit('subscriptionAddonsUpdated', eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdate`, eventData);
+					this.manager.emit('subscriptionAddonsUpdate', eventData);
 				}
 
 				const eventData = {
@@ -236,8 +236,8 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionUpdated`, eventData);
-				this.manager.emit('subscriptionUpdated', eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionUpdate`, eventData);
+				this.manager.emit('subscriptionUpdate', eventData);
 
 				break;
 			}
@@ -274,8 +274,8 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionDeleted`, eventData);
-				this.manager.emit('subscriptionDeleted', eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionDelete`, eventData);
+				this.manager.emit('subscriptionDelete', eventData);
 				break;
 			}
 			case 'invoice.payment_failed': case 'invoice.payment_action_required': {

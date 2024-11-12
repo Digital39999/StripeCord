@@ -1214,7 +1214,7 @@ export class StripeCustomers {
 	}
 
 	public async getCustomer(data: CustomerQueryData): Promise<Stripe.Customer | null> {
-		let customer: Stripe.Customer | Stripe.DeleteCustomer | null = null;
+		let customer: Stripe.Customer | Stripe.DeletedCustomer | null = null;
 
 		if ('customerId' in data) customer = await this.stripe.customers.retrieve(data.customerId) || null;
 		else if ('email' in data && 'userId' in data) {

@@ -262,25 +262,25 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
 `Stripecord` emits various events to notify you when specific actions occur:
 
-- **`subscriptionCreated`**: When a new subscription is created.
+- **``**: When a new subscription is created.
 - **`subscriptionUpdated`**: When a subscription is updated.
-- **`subscriptionCancelled`**: When a subscription is canceled.
-- **`subscriptionDeleted`**: When a subscription is deleted.
-- **`subscriptionTierChanged`**: When a subscription's tier is changed.
+- **`subscriptionCancel`**: When a subscription is canceled.
+- **`subscriptionDelete`**: When a subscription is deleted.
+- **`subscriptionTierChange`**: When a subscription's tier is changed.
 - **`subscriptionAddonsUpdated`**: When the add-ons associated with a subscription are updated.
 
 We encourage you to listen for these events to keep track of subscription changes and updates. For example:
 
 ```javascript
-manager.on('subscriptionCreated', (subscription) => {
+manager.on('subscriptionCreate', (subscription) => {
   // grant access to features for subscription.userId and/or subscription.guildId
 });
 
-manager.on('subscriptionCancelled', (subscription) => {
+manager.on('subscriptionCancel', (subscription) => {
   // revoke access to features for subscription.userId and/or subscription.guildId
 });
 
-manager.on('subscriptionTierChanged', (subscription) => {
+manager.on('subscriptionTierChange', (subscription) => {
   // update access based on the new tier for subscription.userId and/or subscription.guildId
 });
 

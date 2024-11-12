@@ -80,11 +80,11 @@ export type GetAllSubscriptionsQuery = {
 export type GetAllInvoicesQuery = GetAllSubscriptionsQuery;
 
 export type ManagerEvents = {
-	'subscriptionCreated': [data: SubscriptionCreateData];
-	'subscriptionCancelled': [data: SubscriptionCancelData];
-	'subscriptionDeleted': [data: SubscriptionDeleteData];
+	'subscriptionCreate': [data: SubscriptionCreateData];
+	'subscriptionCancel': [data: SubscriptionCancelData];
+	'subscriptionDelete': [data: SubscriptionDeleteData];
 	'subscriptionUpdated': [data: SubscriptionUpdateData];
-	'subscriptionTierChanged': [data: SubscriptionTierChangeData];
+	'subscriptionTierChange': [data: SubscriptionTierChangeData];
 	'subscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
 	'subscriptionRenewed': [data: SubscriptionRenewData];
 

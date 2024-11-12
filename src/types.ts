@@ -86,23 +86,23 @@ export type ManagerEvents = {
 	'subscriptionUpdate': [data: SubscriptionUpdateData];
 	'subscriptionTierChange': [data: SubscriptionTierChangeData];
 	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
-	'subscriptionRenewed': [data: SubscriptionRenewData];
+	'subscriptionRenew': [data: SubscriptionRenewData];
 
-	'guildSubscriptionCreated': [data: SubscriptionCreateData];
-	'guildSubscriptionCancelled': [data: SubscriptionCancelData];
-	'guildSubscriptionDeleted': [data: SubscriptionDeleteData];
-	'guildSubscriptionUpdated': [data: SubscriptionUpdateData];
-	'guildSubscriptionTierChanged': [data: SubscriptionTierChangeData];
-	'guildSubscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
-	'guildSubscriptionRenewed': [data: SubscriptionRenewData];
+	'guildSubscriptionCreate': [data: SubscriptionCreateData];
+	'guildSubscriptionCancel': [data: SubscriptionCancelData];
+	'guildSubscriptionDelete': [data: SubscriptionDeleteData];
+	'guildSubscriptionUpdate': [data: SubscriptionUpdateData];
+	'guildSubscriptionTierChange': [data: SubscriptionTierChangeData];
+	'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'guildSubscriptionRenew': [data: SubscriptionRenewData];
 
-	'userSubscriptionCreated': [data: SubscriptionCreateData];
-	'userSubscriptionCancelled': [data: SubscriptionCancelData];
-	'userSubscriptionDeleted': [data: SubscriptionDeleteData];
-	'userSubscriptionUpdated': [data: SubscriptionUpdateData];
-	'userSubscriptionTierChanged': [data: SubscriptionTierChangeData];
-	'userSubscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
-	'userSubscriptionRenewed': [data: SubscriptionRenewData];
+	'userSubscriptionCreate': [data: SubscriptionCreateData];
+	'userSubscriptionCancel': [data: SubscriptionCancelData];
+	'userSubscriptionDelete': [data: SubscriptionDeleteData];
+	'userSubscriptionUpdate': [data: SubscriptionUpdateData];
+	'userSubscriptionTierChange': [data: SubscriptionTierChangeData];
+	'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'userSubscriptionRenew': [data: SubscriptionRenewData];
 
 	'unprocessedWebhook': [data: unknown];
 	'paymentFailed': [data: PaymentFailedData];

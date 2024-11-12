@@ -105,8 +105,8 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionRenewed`, eventData);
-							this.manager.emit('subscriptionRenewed', eventData);
+							this.manager.emit(`${subscriptionType}SubscriptionRenew`, eventData);
+							this.manager.emit('subscriptionRenew', eventData);
 							break;
 						}
 					}
@@ -172,7 +172,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionTierChanged`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionTierChange`, eventData);
 					this.manager.emit('subscriptionTierChange', eventData);
 				}
 
@@ -217,7 +217,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdated`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdate`, eventData);
 					this.manager.emit('subscriptionAddonsUpdate', eventData);
 				}
 
@@ -236,7 +236,7 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionUpdated`, eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionUpdate`, eventData);
 				this.manager.emit('subscriptionUpdate', eventData);
 
 				break;
@@ -274,7 +274,7 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionDeleted`, eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionDelete`, eventData);
 				this.manager.emit('subscriptionDelete', eventData);
 				break;
 			}
@@ -1214,7 +1214,7 @@ export class StripeCustomers {
 	}
 
 	public async getCustomer(data: CustomerQueryData): Promise<Stripe.Customer | null> {
-		let customer: Stripe.Customer | Stripe.DeletedCustomer | null = null;
+		let customer: Stripe.Customer | Stripe.DeleteCustomer | null = null;
 
 		if ('customerId' in data) customer = await this.stripe.customers.retrieve(data.customerId) || null;
 		else if ('email' in data && 'userId' in data) {

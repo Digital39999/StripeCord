@@ -267,7 +267,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 - **`subscriptionCancel`**: When a subscription is canceled.
 - **`subscriptionDelete`**: When a subscription is deleted.
 - **`subscriptionTierChange`**: When a subscription's tier is changed.
-- **`subscriptionAddonsUpdated`**: When the add-ons associated with a subscription are updated.
+- **`subscriptionAddonsUpdate`**: When the add-ons associated with a subscription are updated.
 
 We encourage you to listen for these events to keep track of subscription changes and updates. For example:
 
@@ -284,7 +284,7 @@ manager.on('subscriptionTierChange', (subscription) => {
   // update access based on the new tier for subscription.userId and/or subscription.guildId
 });
 
-manager.on('subscriptionAddonsUpdated', (subscription) => {
+manager.on('subscriptionAddonsUpdate', (subscription) => {
   // update access based on the new add-ons for subscription.userId and/or subscription.guildId
 });
 ```

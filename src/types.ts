@@ -85,7 +85,7 @@ export type ManagerEvents = {
 	'subscriptionDelete': [data: SubscriptionDeleteData];
 	'subscriptionUpdate': [data: SubscriptionUpdateData];
 	'subscriptionTierChange': [data: SubscriptionTierChangeData];
-	'subscriptionAddonsUpdated': [data: SubscriptionAddonChangeData];
+	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
 	'subscriptionRenewed': [data: SubscriptionRenewData];
 
 	'guildSubscriptionCreated': [data: SubscriptionCreateData];

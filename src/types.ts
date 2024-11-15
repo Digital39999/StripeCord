@@ -1,19 +1,20 @@
+import { ChargeType, PaymentStatus, WhatHappened } from './enums';
 import Stripe from 'stripe';
-
-export type DeepNonNullable<T> = T extends NonNullable<T> ? T : DeepNonNullable<NonNullable<T>>;
 
 export type ConfigType = {
 	premiumTiers: PremiumTier[];
 	addons: Addon[];
 
 	stripeApiKey: string;
-	stripeWebhookSecret: string;
+	stripeWebhookUrl: string;
 
 	options?: {
 		stripe?: {
-			includeTaxInPrice?: boolean;
-			deleteUnknownTiers?: boolean;
-			redirectUrl?: string;
+			invoiceAllOnDisputeLoss?: boolean; // Invoicing might create another payment, for example, and that could lead to another dispute, which you might want to avoid.  On the other hand, if there are outstanding items to bill for, you might want to make the attempt.
+			deleteUnknownTiers?: boolean; // If a tier is deleted from the database, should it be deleted from Stripe as well?
+			includeTaxInPrice?: boolean; // If the price includes tax, set this to true.
+			defaultDueDays?: number; // Default number of days before payment is due for upgrades or addon changes.
+			redirectUrl?: string; // URL to redirect to after a successful payment, only base URL is needed.
 		};
 	};
 };
@@ -105,7 +106,9 @@ export type ManagerEvents = {
 	'userSubscriptionRenew': [data: SubscriptionRenewData];
 
 	'unprocessedWebhook': [data: unknown];
-	'paymentFailed': [data: PaymentFailedData];
+	'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
+	'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
+	'disputeWarning': [data: DisputeWarningData];
 	'debug': [message: string];
 };
 
@@ -124,7 +127,11 @@ export type BaseSubscriptionData = {
 	addons: WithQuantity<StripeAddon>[];
 };
 
-export type PaymentFailedData = Omit<BaseSubscriptionData, 'tierId'> & {
+export type InvoiceNeedsPayment = Omit<BaseSubscriptionData, 'tierId'> & {
+	status: PaymentStatus;
+	finalTotal: number;
+	hostedUrl: string | null;
+
 	raw: {
 		subscription: Stripe.Subscription;
 		invoice: Stripe.Invoice;
@@ -166,7 +173,7 @@ export type SubscriptionAddonChangeData = Omit<SubscriptionUpdateData, 'addons'>
 };
 
 export type AddonUpdateType = {
-	whatHappened: 'added' | 'removed' | 'updated' | 'nothing';
+	whatHappened: WhatHappened;
 	addon: StripeAddon;
 	qty: number;
 };
@@ -182,4 +189,22 @@ export type SubscriptionCreateInputData = {
 	trialEndsAt?: Date;
 
 	metadata?: Record<string, string>;
+};
+
+export type ChargeOptions = {
+	chargeType: ChargeType;
+	dueDays?: number;
+};
+
+export type DisputeWarningData = {
+	reason: string;
+	amount: number;
+
+	isRefundable: boolean;
+	dashboardUrl: string;
+
+	raw: {
+		dispute: Stripe.Dispute;
+		charge: Stripe.Charge | null;
+	};
 };

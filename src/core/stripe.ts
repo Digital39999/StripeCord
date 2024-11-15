@@ -1,10 +1,11 @@
-import { Addon, AddonUpdateType, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
 import { stringifyError } from '../utils';
 import Stripe from 'stripe';
 
 export default class StripeManager {
-	private stripe: Stripe;
+	readonly stripe: Stripe;
 
 	public tiers: StripeTiers;
 	public addons: StripeAddons;
@@ -12,7 +13,12 @@ export default class StripeManager {
 	public customers: StripeCustomers;
 	public subscriptions: StripeSubscriptions;
 
+	private stripeWebhookSecret: string | null = null;
+
 	constructor(private readonly manager: PremiumManager) {
+		if (!manager.config.stripeApiKey) throw new Error('Missing Stripe API key.');
+		else if (!manager.config.stripeWebhookUrl) throw new Error('Missing Stripe webhook url.');
+
 		this.stripe = new Stripe(manager.config.stripeApiKey);
 
 		this.tiers = new StripeTiers(manager, this.stripe);
@@ -27,11 +33,43 @@ export default class StripeManager {
 		await this.addons.syncOrCreateAddons();
 	}
 
+	public async validateWebhook() {
+		const pastWebhooks = await this.stripe.webhookEndpoints.list();
+		const webhook = pastWebhooks.data.filter((wh) => wh.url === this.manager.config.stripeWebhookUrl || wh.metadata._internal === 'StripeCord');
+
+		for (const wh of webhook) await this.stripe.webhookEndpoints.del(wh.id).catch(() => null);
+
+		const newWebhook = await this.stripe.webhookEndpoints.create({
+			url: this.manager.config.stripeWebhookUrl,
+			enabled_events: [
+				'invoice.paid',
+				'customer.subscription.updated',
+				'customer.subscription.deleted',
+				'invoice.finalized',
+				'invoice.payment_failed',
+				'invoice.payment_action_required',
+				'radar.early_fraud_warning.created',
+				'charge.dispute.funds_withdrawn',
+				'charge.dispute.created',
+			],
+			metadata: {
+				_internal: 'StripeCord',
+			},
+		});
+
+		if (!newWebhook.secret) throw new Error('Failed to create webhook secret.');
+		this.stripeWebhookSecret = newWebhook.secret;
+		return newWebhook;
+	}
+
 	public async webhookHandler(payload: string | Buffer, signature: string): Promise<WebhookResponse> {
+		if (!this.stripeWebhookSecret) await this.validateWebhook();
+		if (!this.stripeWebhookSecret) throw new Error('Failed to validate webhook.');
+
 		let event: Stripe.Event;
 
 		try {
-			event = await this.stripe.webhooks.constructEventAsync(payload, signature, this.manager.config.stripeWebhookSecret);
+			event = await this.stripe.webhooks.constructEventAsync(payload, signature, this.stripeWebhookSecret);
 		} catch (error) {
 			this.manager.emit('unprocessedWebhook', payload);
 			throw new Error(`Invalid Stripe webhook: ${stringifyError(error)}`);
@@ -41,7 +79,7 @@ export default class StripeManager {
 			case 'invoice.paid': {
 				const invoice: { data: null | Stripe.Invoice; } = { data: null };
 
-				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object);
+				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object).catch(() => null);
 				else invoice.data = event.data.object;
 
 				if (!invoice.data || !invoice.data?.subscription) return {
@@ -52,7 +90,7 @@ export default class StripeManager {
 				if (invoice.data.subscription) {
 					const subscription: { data: null | Stripe.Subscription; } = { data: null };
 
-					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription);
+					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
 					else subscription.data = invoice.data.subscription;
 
 					if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
@@ -184,22 +222,25 @@ export default class StripeManager {
 						const addon = addonItems.find((item) => item.addonId === changedQuantityAddons.addonId);
 						if (!addon) continue;
 
-						addonUpdates.push({ whatHappened: 'updated', addon, qty: changedQuantityAddons.quantity });
+						addonUpdates.push({ whatHappened: WhatHappened.Updated, addon, qty: changedQuantityAddons.quantity });
 					}
 
 					for (const newAddon of addonsChange.currentAddons) {
 						const oldAddon = addonsChange.previousAddons.find((addon) => addon.addonId === newAddon.addonId);
-						if (!oldAddon) addonUpdates.push({ whatHappened: 'added', addon: newAddon, qty: newAddon.quantity });
+						if (!oldAddon) addonUpdates.push({ whatHappened: WhatHappened.Added, addon: newAddon, qty: newAddon.quantity });
 						else if (oldAddon.quantity !== newAddon.quantity) {
 							const exists = addonUpdates.find((update) => update.addon.addonId === newAddon.addonId);
-							if (!exists) addonUpdates.push({ whatHappened: 'updated', addon: newAddon, qty: newAddon.quantity });
+							if (!exists) addonUpdates.push({ whatHappened: WhatHappened.Updated, addon: newAddon, qty: newAddon.quantity });
 						}
 					}
 
 					for (const oldAddon of addonsChange.previousAddons) {
 						const newAddon = addonsChange.currentAddons.find((addon) => addon.addonId === oldAddon.addonId);
-						if (!newAddon) addonUpdates.push({ whatHappened: 'removed', addon: oldAddon, qty: oldAddon.quantity });
+						if (!newAddon) addonUpdates.push({ whatHappened: WhatHappened.Removed, addon: oldAddon, qty: oldAddon.quantity });
 					}
+
+					const theRest = addonItems.filter((item) => !addonsChange.currentAddons.some((addon) => addon.addonId === item.addonId));
+					for (const addon of theRest) addonUpdates.push({ whatHappened: WhatHappened.Nothing, addon, qty: addon.quantity });
 
 					const eventData = {
 						type: subscriptionType,
@@ -244,7 +285,7 @@ export default class StripeManager {
 			case 'customer.subscription.deleted': {
 				const subscription: { data: null | Stripe.Subscription; } = { data: null };
 
-				if (typeof event.data.object === 'string') subscription.data = await this.stripe.subscriptions.retrieve(event.data.object);
+				if (typeof event.data.object === 'string') subscription.data = await this.stripe.subscriptions.retrieve(event.data.object).catch(() => null);
 				else subscription.data = event.data.object;
 
 				if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
@@ -278,10 +319,12 @@ export default class StripeManager {
 				this.manager.emit('subscriptionDelete', eventData);
 				break;
 			}
-			case 'invoice.payment_failed': case 'invoice.payment_action_required': {
+			case 'invoice.finalized':
+			case 'invoice.payment_failed':
+			case 'invoice.payment_action_required': {
 				const invoice: { data: null | Stripe.Invoice; } = { data: null };
 
-				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object);
+				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object).catch(() => null);
 				else invoice.data = event.data.object;
 
 				if (!invoice.data || !invoice.data?.subscription) return {
@@ -292,7 +335,7 @@ export default class StripeManager {
 				if (invoice.data.subscription) {
 					const subscription: { data: null | Stripe.Subscription; } = { data: null };
 
-					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription);
+					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
 					else subscription.data = invoice.data.subscription;
 
 					if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
@@ -308,10 +351,23 @@ export default class StripeManager {
 					const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
 					const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
+					let status: PaymentStatus;
+
+					switch (event.type) {
+						case 'invoice.finalized': status = PaymentStatus.PendingPayment; break;
+						case 'invoice.payment_failed': status = PaymentStatus.PaymentFailed; break;
+						case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
+						default: status = PaymentStatus.PendingPayment; break;
+					}
+
 					const eventData = {
 						type: subscriptionType,
 
 						addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
+
+						status: status,
+						finalTotal: invoice.data.total,
+						hostedUrl: invoice.data.hosted_invoice_url ?? null,
 
 						userId: subscription.data.metadata.userId,
 						guildId: subscription.data.metadata.guildId ?? null,
@@ -322,10 +378,57 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit('paymentFailed', eventData);
+					this.manager.emit('invoiceNeedsPayment', eventData);
 				}
 
 				break;
+			}
+			case 'radar.early_fraud_warning.created': {
+				this.manager.emit('earlyFraudWarning', event.data.object);
+
+				if (event.data.object.actionable) await this.stripe.refunds.create({ charge: typeof event.data.object.charge === 'string' ? event.data.object.charge : event.data.object.charge.id });
+				break;
+			}
+			case 'charge.dispute.funds_withdrawn': {
+				const charge = await this.stripe.charges.retrieve(typeof event.data.object.charge === 'string' ? event.data.object.charge : event.data.object.charge.id, {
+					expand: ['invoice.subscription'],
+				}).catch(() => null);
+				if (!charge) return { status: 400, message: 'Failed to retrieve charge data.' };
+
+				const invoice = charge.invoice;
+				if (!invoice || typeof invoice === 'string') return { status: 400, message: 'Failed to retrieve invoice data.' };
+
+				const subscription = invoice.subscription;
+				if (!subscription || typeof subscription === 'string') return { status: 400, message: 'Failed to retrieve subscription data.' };
+
+				await this.stripe.subscriptions.cancel(subscription.id, { invoice_now: this.manager.config.options?.stripe?.invoiceAllOnDisputeLoss || false });
+
+				break;
+			}
+			case 'charge.dispute.created': {
+				const paymentIntentId = typeof event.data.object.payment_intent === 'string' ? event.data.object.payment_intent : event.data.object.payment_intent?.id;
+
+				this.manager.emit('disputeWarning', {
+					amount: event.data.object.amount,
+					reason: event.data.object.reason,
+
+					isRefundable: event.data.object.is_charge_refundable,
+					dashboardUrl: 'https://dashboard.stripe.com' + (event.data.object.livemode ? '' : '/test') + '/payments/' + paymentIntentId,
+
+					raw: {
+						charge: typeof event.data.object.charge === 'string' ? await this.stripe.charges.retrieve(event.data.object.charge).catch(() => null) : event.data.object.charge,
+						dispute: event.data.object,
+					},
+				});
+
+				break;
+			}
+			default: {
+				this.manager.emit('unprocessedWebhook', payload);
+				return {
+					status: 400,
+					message: 'Unhandled Stripe webhook.',
+				};
 			}
 		}
 
@@ -911,11 +1014,23 @@ export class StripeSubscriptions {
 	}
 
 	public async cancelSubscription(subscriptionId: string, immediately = false): Promise<boolean> {
-		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
 		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
 
-		if (immediately) await this.stripe.subscriptions.cancel(subscriptionId);
+		if (immediately) await this.stripe.subscriptions.cancel(subscriptionId, { invoice_now: true });
 		else await this.stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+
+		return true;
+	}
+
+	public async refundCharge(chargeId: string, isFraud = false): Promise<boolean> {
+		const charge = await this.stripe.charges.retrieve(chargeId).catch(() => null);
+		if (!charge) throw new Error(`Charge not found for ID ${chargeId}.`);
+
+		await this.stripe.refunds.create({
+			charge: charge.id,
+			reason: isFraud ? 'fraudulent' : 'requested_by_customer',
+		});
 
 		return true;
 	}
@@ -986,6 +1101,11 @@ export class StripeSubscriptions {
 					saved_payment_method_options: {
 						payment_method_save: 'enabled',
 					},
+					payment_method_options: {
+						card: {
+							request_three_d_secure: 'any',
+						},
+					},
 				});
 
 				return session;
@@ -1054,8 +1174,8 @@ export class StripeSubscriptions {
 		}
 	}
 
-	public async changeSubscriptionTier(subscriptionId: string, newTierId: string): Promise<boolean> {
-		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+	public async changeSubscriptionTier(subscriptionId: string, newTierId: string, options?: Partial<ChargeOptions>): Promise<boolean> {
+		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
 		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
 		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId}.`);
@@ -1084,8 +1204,17 @@ export class StripeSubscriptions {
 			else newItems.push({ id: item.id });
 		}
 
+		const chargeType = options?.chargeType || 'immediate';
+		let proration_behavior: 'create_prorations' | 'none';
+
+		if (chargeType === 'immediate') proration_behavior = 'create_prorations';
+		else if (chargeType === 'endOfPeriod') proration_behavior = 'none';
+		else proration_behavior = 'none';
+
+		this.manager.emit('debug', `Updating subscription ${subscriptionId} with tier ${newTierId} and proration behavior ${proration_behavior}.`);
+
 		await this.stripe.subscriptions.update(subscriptionId, {
-			proration_behavior: 'create_prorations',
+			proration_behavior,
 			items: newItems,
 			metadata: {
 				...subscription.metadata,
@@ -1093,30 +1222,44 @@ export class StripeSubscriptions {
 			},
 		});
 
-		const invoice = await this.stripe.invoices.create({
-			customer: customerId,
-			subscription: subscriptionId,
-			auto_advance: true,
-			default_payment_method: typeof subscription.default_payment_method === 'string' ? subscription.default_payment_method : subscription.default_payment_method?.id,
-			collection_method: 'charge_automatically',
-		});
-
-		const finalizedInvoice = await this.stripe.invoices.finalizeInvoice(invoice.id);
-
-		if (finalizedInvoice.total < 0) {
-			this.manager.emit('debug', `Subscription ${subscriptionId} has a negative total of ${finalizedInvoice.total}, and user was credited that amount.`);
-			await this.stripe.customers.update(customerId, {
-				balance: ((await this.stripeManager.customers.getCustomer({ customerId }))?.balance || 0) + Math.abs(finalizedInvoice.total),
+		if (chargeType === 'immediate') {
+			const invoice = await this.stripe.invoices.create({
+				customer: customerId,
+				subscription: subscriptionId,
+				auto_advance: true,
+				default_payment_method: typeof subscription.default_payment_method === 'string' ? subscription.default_payment_method : subscription.default_payment_method?.id,
+				collection_method: 'charge_automatically',
 			});
-		} else {
-			if (finalizedInvoice.status === 'open') await this.stripe.invoices.pay(invoice.id);
+
+			const finalizedInvoice = await this.stripe.invoices.finalizeInvoice(invoice.id);
+
+			if (finalizedInvoice.total < 0) {
+				this.manager.emit('debug', `Subscription ${subscriptionId} has a negative total of ${finalizedInvoice.total}, and user was credited that amount.`);
+				await this.stripe.customers.update(customerId, {
+					balance: ((await this.stripeManager.customers.getCustomer({ customerId }))?.balance || 0) + Math.abs(finalizedInvoice.total),
+				});
+			} else if (finalizedInvoice.status === 'open') {
+				this.manager.emit('debug', `Subscription ${subscriptionId} has a total of ${finalizedInvoice.total}, and user was charged that amount.`);
+				await this.stripe.invoices.pay(invoice.id);
+			}
+		} else if (chargeType === 'sendInvoice') {
+			const invoice = await this.stripe.invoices.create({
+				customer: customerId,
+				subscription: subscriptionId,
+				auto_advance: true,
+				collection_method: 'send_invoice',
+				days_until_due: options?.dueDays || this.manager.config.options?.stripe?.defaultDueDays || 7,
+			});
+
+			await this.stripe.invoices.finalizeInvoice(invoice.id);
+			this.manager.emit('debug', `Subscription ${subscriptionId} has a total of ${invoice.total}, and an invoice was sent to the user.`);
 		}
 
 		return true;
 	}
 
-	public async changeSubscriptionAddons(subscriptionId: string, newAddons: WithQuantity<Addon>[]): Promise<boolean> {
-		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+	public async changeSubscriptionAddons(subscriptionId: string, newAddons: WithQuantity<Addon>[], options?: Partial<ChargeOptions>): Promise<boolean> {
+		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
 		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
 		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId}.`);
@@ -1169,28 +1312,49 @@ export class StripeSubscriptions {
 
 		this.manager.emit('debug', `Updating subscription ${subscriptionId} with addons: ${newItems.map((item) => item.price).join(', ')}.`);
 
+		const chargeType = options?.chargeType || 'immediate';
+		let proration_behavior: 'create_prorations' | 'none';
+
+		if (chargeType === 'immediate') proration_behavior = 'create_prorations';
+		else if (chargeType === 'endOfPeriod') proration_behavior = 'none';
+		else proration_behavior = 'none';
+
 		await this.stripe.subscriptions.update(subscriptionId, {
-			proration_behavior: 'create_prorations',
+			proration_behavior,
 			items: newItems,
 		});
 
-		const invoice = await this.stripe.invoices.create({
-			customer: customerId,
-			subscription: subscriptionId,
-			auto_advance: true,
-			default_payment_method: typeof subscription.default_payment_method === 'string' ? subscription.default_payment_method : subscription.default_payment_method?.id,
-			collection_method: 'charge_automatically',
-		});
-
-		const finalizedInvoice = await this.stripe.invoices.finalizeInvoice(invoice.id);
-
-		if (finalizedInvoice.total < 0) {
-			this.manager.emit('debug', `Subscription ${subscriptionId} has a negative total of ${finalizedInvoice.total}, and user was credited that amount.`);
-			await this.stripe.customers.update(customerId, {
-				balance: ((await this.stripeManager.customers.getCustomer({ customerId }))?.balance || 0) + Math.abs(finalizedInvoice.total),
+		if (chargeType === 'immediate') {
+			const invoice = await this.stripe.invoices.create({
+				customer: customerId,
+				subscription: subscriptionId,
+				auto_advance: true,
+				default_payment_method: typeof subscription.default_payment_method === 'string' ? subscription.default_payment_method : subscription.default_payment_method?.id,
+				collection_method: 'charge_automatically',
 			});
-		} else {
-			if (finalizedInvoice.status === 'open') await this.stripe.invoices.pay(invoice.id);
+
+			const finalizedInvoice = await this.stripe.invoices.finalizeInvoice(invoice.id);
+
+			if (finalizedInvoice.total < 0) {
+				this.manager.emit('debug', `Subscription ${subscriptionId} has a negative total of ${finalizedInvoice.total}, and user was credited that amount.`);
+				await this.stripe.customers.update(customerId, {
+					balance: ((await this.stripeManager.customers.getCustomer({ customerId }))?.balance || 0) + Math.abs(finalizedInvoice.total),
+				});
+			} else if (finalizedInvoice.status === 'open') {
+				this.manager.emit('debug', `Subscription ${subscriptionId} has a total of ${finalizedInvoice.total}, and user was charged that amount.`);
+				await this.stripe.invoices.pay(invoice.id);
+			}
+		} else if (chargeType === 'sendInvoice') {
+			const invoice = await this.stripe.invoices.create({
+				customer: customerId,
+				subscription: subscriptionId,
+				auto_advance: true,
+				collection_method: 'send_invoice',
+				days_until_due: options?.dueDays || this.manager.config.options?.stripe?.defaultDueDays || 7,
+			});
+
+			await this.stripe.invoices.finalizeInvoice(invoice.id);
+			this.manager.emit('debug', `Subscription ${subscriptionId} has a total of ${invoice.total}, and an invoice was sent to the user.`);
 		}
 
 		return true;
@@ -1216,7 +1380,7 @@ export class StripeCustomers {
 	public async getCustomer(data: CustomerQueryData): Promise<Stripe.Customer | null> {
 		let customer: Stripe.Customer | Stripe.DeletedCustomer | null = null;
 
-		if ('customerId' in data) customer = await this.stripe.customers.retrieve(data.customerId) || null;
+		if ('customerId' in data) customer = await this.stripe.customers.retrieve(data.customerId).catch(() => null) || null;
 		else if ('email' in data && 'userId' in data) {
 			const customers = await this.getAllCustomers({ email: data.email });
 			customer = customers?.find((c) => c.metadata.userId === data.userId) || null;

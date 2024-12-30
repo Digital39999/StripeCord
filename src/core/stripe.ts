@@ -1046,7 +1046,7 @@ export class StripeSubscriptions {
 
 		switch (tierData.type) {
 			case 'user': {
-				const isAnyAddonNotUser = data.addons.some((addon) => addon.type !== 'user');
+				const isAnyAddonNotUser = data.addons?.some((addon) => addon.type !== 'user');
 				if (isAnyAddonNotUser) throw new Error('User subscriptions cannot have guild addons.');
 				else if (data.guildId) throw new Error('User subscriptions cannot be created for guilds.');
 
@@ -1063,9 +1063,9 @@ export class StripeSubscriptions {
 					quantity: 1,
 				}];
 
-				const stripeAddons = data.addons.length ? await this.stripeManager.addons.getStripeAddons() : [];
+				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
 
-				for (const addon of data.addons) {
+				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
 
@@ -1111,7 +1111,7 @@ export class StripeSubscriptions {
 				return session;
 			}
 			case 'guild': {
-				const isAnyAddonNotGuild = data.addons.some((addon) => addon.type !== 'guild');
+				const isAnyAddonNotGuild = data.addons?.some((addon) => addon.type !== 'guild');
 				if (isAnyAddonNotGuild) throw new Error('Guild subscriptions cannot have user addons.');
 				else if (!data.guildId) throw new Error('Guild subscriptions must be created for guilds.');
 
@@ -1128,9 +1128,9 @@ export class StripeSubscriptions {
 					quantity: 1,
 				}];
 
-				const stripeAddons = data.addons.length ? await this.stripeManager.addons.getStripeAddons() : [];
+				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
 
-				for (const addon of data.addons) {
+				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
 

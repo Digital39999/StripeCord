@@ -182,10 +182,10 @@ export type SubscriptionCreateInputData = {
 	customer: CustomerCreateData;
 	tierId: string;
 
-	guildId: string | null;
-	guildName: string | null;
+	guildId?: string;
+	guildName?: string;
 
-	addons: WithQuantity<Addon>[];
+	addons?: WithQuantity<Pick<Addon, 'addonId' | 'type'>>[];
 	trialEndsAt?: Date;
 
 	metadata?: Record<string, string>;

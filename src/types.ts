@@ -10,7 +10,7 @@ export type ConfigType = {
 
 	options?: {
 		stripe?: {
-			invoiceAllOnDisputeLoss?: boolean; // Invoicing might create another payment, for example, and that could lead to another dispute, which you might want to avoid.  On the other hand, if there are outstanding items to bill for, you might want to make the attempt.
+			invoiceAllOnDisputeLoss?: boolean; // Invoicing might create another payment, for example, and that could lead to another dispute, which you might want to avoid. On the other hand, if there are outstanding items to bill for, you might want to make the attempt.
 			deleteUnknownTiers?: boolean; // If a tier is deleted from the database, should it be deleted from Stripe as well?
 			includeTaxInPrice?: boolean; // If the price includes tax, set this to true.
 			defaultDueDays?: number; // Default number of days before payment is due for upgrades or addon changes.

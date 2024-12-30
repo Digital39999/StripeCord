@@ -11,8 +11,10 @@ export class PremiumManager extends EventEmitter {
 		this.stripeManager = new StripeManager(this);
 	}
 
-	public syncAll() {
-		this.stripeManager.syncAll();
+	public async syncAll() {
+		await Promise.all([
+			this.stripeManager.syncAll(),
+		]);
 	}
 
 	emit<K extends keyof ManagerEvents>(event: K, ...args: ManagerEvents[K]) {

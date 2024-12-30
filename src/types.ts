@@ -27,6 +27,7 @@ export type PremiumTier = {
 	type: TierType;
 	tierId: string;
 	priceCents: number;
+	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
 };
 
@@ -35,6 +36,7 @@ export type Addon = {
 	type: TierType;
 	addonId: string;
 	priceCents: number;
+	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
 };
 

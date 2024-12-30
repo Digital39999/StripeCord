@@ -463,7 +463,7 @@ export class StripeTiers {
 					active: true,
 					unit_amount: data.priceCents,
 					tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-					currency: 'usd',
+					currency: data.currency ?? 'usd',
 					product: existingProduct.id,
 					metadata: {
 						_internal_type: data.type,
@@ -485,7 +485,7 @@ export class StripeTiers {
 				active: data.isActive ?? true,
 				unit_amount: data.priceCents,
 				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-				currency: 'usd',
+				currency: data.currency ?? 'usd',
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.tierId,
@@ -589,7 +589,7 @@ export class StripeTiers {
 		return true;
 	}
 
-	private async changePrice(tierId: string, priceCents: number): Promise<boolean> {
+	private async changePrice(tierId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
@@ -608,7 +608,7 @@ export class StripeTiers {
 
 		const newPrice = await this.stripe.prices.create({
 			unit_amount: priceCents,
-			currency: 'usd',
+			currency: currency ?? 'usd',
 			product: tier.stripeProductId,
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
@@ -669,7 +669,7 @@ export class StripeTiers {
 			if (!stripeTier) continue;
 
 			if (stripeTier.priceCents !== tier.priceCents) {
-				await this.changePrice(tier.tierId, tier.priceCents);
+				await this.changePrice(tier.tierId, tier.priceCents, tier.currency);
 			}
 
 			if (stripeTier.isActive !== tier.isActive) {
@@ -739,7 +739,7 @@ export class StripeAddons {
 					active: true,
 					unit_amount: data.priceCents,
 					tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-					currency: 'usd',
+					currency: data.currency ?? 'usd',
 					product: existingProduct.id,
 					recurring: {
 						interval: 'month',
@@ -762,7 +762,7 @@ export class StripeAddons {
 				active: data.isActive ?? true,
 				unit_amount: data.priceCents,
 				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-				currency: 'usd',
+				currency: data.currency ?? 'usd',
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.addonId,
@@ -838,7 +838,7 @@ export class StripeAddons {
 		return true;
 	}
 
-	private async changePrice(addonId: string, priceCents: number): Promise<boolean> {
+	private async changePrice(addonId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
@@ -857,7 +857,7 @@ export class StripeAddons {
 
 		const newPrice = await this.stripe.prices.create({
 			unit_amount: priceCents,
-			currency: 'usd',
+			currency: currency ?? 'usd',
 			product: addon.stripeProductId,
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
@@ -919,7 +919,7 @@ export class StripeAddons {
 			if (!stripeAddon) continue;
 
 			if (stripeAddon.priceCents !== addon.priceCents) {
-				await this.changePrice(addon.addonId, addon.priceCents);
+				await this.changePrice(addon.addonId, addon.priceCents, addon.currency);
 			}
 
 			if (stripeAddon.isActive !== addon.isActive) {

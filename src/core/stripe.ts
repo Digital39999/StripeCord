@@ -541,7 +541,7 @@ export class StripeTiers {
 			const tierType = product.metadata._internal_type;
 
 			if (!tierId || !tierType) continue;
-			else if (!['guild', 'user' ].includes(tierType)) throw new Error(`Invalid tier type for price ${price.id}: ${tierType}`);
+			else if (!['guild', 'user'].includes(tierType)) throw new Error(`Invalid tier type for price ${price.id}: ${tierType}`);
 
 			tiers.push({
 				tierId,
@@ -574,7 +574,7 @@ export class StripeTiers {
 			const addonType = product.metadata._internal_type;
 
 			if (!addonId || !addonType) continue;
-			else if (!['guild', 'user' ].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
+			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
 
 			addons.push({
 				addonId,
@@ -687,6 +687,21 @@ export class StripeTiers {
 
 			if (stripeTier.isActive !== tier.isActive) {
 				await this.changeActiveState(tier.tierId, tier.isActive);
+			}
+
+			if (stripeTier.name !== tier.name) {
+				await this.stripe.products.update(stripeTier.stripeProductId, {
+					name: tier.name,
+				});
+			}
+
+			if (stripeTier.type !== tier.type) {
+				await this.stripe.products.update(stripeTier.stripeProductId, {
+					metadata: {
+						_internal_type: tier.type,
+						_internal_id: tier.tierId,
+					},
+				});
 			}
 		}
 	}
@@ -823,7 +838,7 @@ export class StripeAddons {
 			if (isAddon !== 'true') continue;
 
 			if (!addonId || !addonType) continue;
-			else if (!['guild', 'user' ].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
+			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
 
 			addons.push({
 				addonId,
@@ -937,6 +952,21 @@ export class StripeAddons {
 
 			if (stripeAddon.isActive !== addon.isActive) {
 				await this.changeActiveState(addon.addonId, addon.isActive);
+			}
+
+			if (stripeAddon.name !== addon.name) {
+				await this.stripe.products.update(stripeAddon.stripeProductId, {
+					name: addon.name,
+				});
+			}
+
+			if (stripeAddon.type !== addon.type) {
+				await this.stripe.products.update(stripeAddon.stripeProductId, {
+					metadata: {
+						_internal_type: addon.type,
+						_internal_id: addon.addonId,
+					},
+				});
 			}
 		}
 	}

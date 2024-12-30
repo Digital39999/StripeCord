@@ -119,17 +119,17 @@ export type WebhookResponse = {
 	message: string;
 };
 
-export type BaseSubscriptionData = {
-	type: TierType;
+export type BaseSubscriptionData<T extends TierType = TierType> = {
+	type: T;
 	tier: PremiumTier;
 
 	userId: string;
-	guildId: string | null;
+	guildId: T extends 'guild' ? string : null;
 
 	addons: WithQuantity<StripeAddon>[];
 };
 
-export type InvoiceNeedsPayment = Omit<BaseSubscriptionData, 'tier'> & {
+export type InvoiceNeedsPayment<T extends TierType = TierType> = Omit<BaseSubscriptionData<T>, 'tier'> & {
 	status: PaymentStatus;
 	finalTotal: number;
 	hostedUrl: string | null;
@@ -140,7 +140,7 @@ export type InvoiceNeedsPayment = Omit<BaseSubscriptionData, 'tier'> & {
 	};
 };
 
-export type SubscriptionCreateData = BaseSubscriptionData & {
+export type SubscriptionCreateData<T extends TierType = TierType> = BaseSubscriptionData<T> & {
 	raw: {
 		subscription: Stripe.Subscription;
 		invoice: Stripe.Invoice;
@@ -149,7 +149,7 @@ export type SubscriptionCreateData = BaseSubscriptionData & {
 
 export type SubscriptionRenewData = SubscriptionCreateData;
 
-export type SubscriptionUpdateData = BaseSubscriptionData & {
+export type SubscriptionUpdateData<T extends TierType = TierType> = BaseSubscriptionData<T> & {
 	raw: {
 		subscription: Stripe.Subscription;
 		previous: Partial<Stripe.Subscription> | null;
@@ -163,7 +163,7 @@ export type SubscriptionTierChangeData = Omit<SubscriptionUpdateData, 'tier'> & 
 	oldTier: PremiumTier;
 };
 
-export type SubscriptionDeleteData = BaseSubscriptionData & {
+export type SubscriptionDeleteData<T extends TierType = TierType> = BaseSubscriptionData<T> & {
 	raw: {
 		subscription: Stripe.Subscription;
 	};

@@ -106,11 +106,14 @@ export default class StripeManager {
 					const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
 					const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
+					const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.data?.metadata.tierId);
+					if (!tierData) return { status: 400, message: `Tier not found for ID ${subscription.data.metadata.tierId} locally (#1).` };
+
 					switch (invoice.data.billing_reason) {
 						case 'subscription_create': {
 							const eventData = {
 								type: subscriptionType,
-								tierId: subscription.data.metadata.tierId,
+								tier: tierData,
 
 								addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
@@ -130,7 +133,7 @@ export default class StripeManager {
 						case 'subscription_cycle': {
 							const eventData = {
 								type: subscriptionType,
-								tierId: subscription.data.metadata.tierId,
+								tier: tierData,
 
 								addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
@@ -171,10 +174,13 @@ export default class StripeManager {
 				const stripeAddons = await this.addons.getStripeAddons();
 				const addonItems = await this.addons.getAddonsFromItems(subscription.data.items.data, stripeAddons) ?? [];
 
+				const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.data?.metadata.tierId);
+				if (!tierData) return { status: 400, message: `Tier not found for ID ${subscription.data.metadata.tierId} locally (#2).` };
+
 				if (subscription.data.status === 'canceled' && subscription.previous.status !== 'canceled') {
 					const eventData = {
 						type: subscriptionType,
-						tierId: subscription.data.metadata.tierId,
+						tier: tierData,
 
 						addons: addonItems,
 
@@ -193,11 +199,15 @@ export default class StripeManager {
 
 				const downgradeOrUpgrade = await this.tiers.checkIfTierChange(subscription.data.items.data, subscription.previous.items?.data || []);
 				if (downgradeOrUpgrade) {
+					const newTierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === downgradeOrUpgrade.newTierId);
+					const oldTierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === downgradeOrUpgrade.oldTierId);
+					if (!newTierData || !oldTierData) return { status: 400, message: `Tier not found for ID ${downgradeOrUpgrade.newTierId} or ${downgradeOrUpgrade.oldTierId} locally (#3).` };
+
 					const eventData = {
 						type: subscriptionType,
 
-						newTierId: downgradeOrUpgrade.newTierId,
-						oldTierId: downgradeOrUpgrade.oldTierId,
+						newTier: newTierData,
+						oldTier: oldTierData,
 
 						addons: addonItems,
 
@@ -244,7 +254,7 @@ export default class StripeManager {
 
 					const eventData = {
 						type: subscriptionType,
-						tierId: subscription.data.metadata.tierId,
+						tier: tierData,
 
 						currentAddons: addonsChange.currentAddons,
 						addonUpdates,
@@ -264,7 +274,7 @@ export default class StripeManager {
 
 				const eventData = {
 					type: subscriptionType,
-					tierId: subscription.data.metadata.tierId,
+					tier: tierData,
 
 					addons: addonItems,
 
@@ -301,9 +311,12 @@ export default class StripeManager {
 				const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
 				const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
+				const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.data?.metadata.tierId);
+				if (!tierData) return { status: 400, message: `Tier not found for ID ${subscription.data.metadata.tierId} locally (#4).` };
+
 				const eventData = {
 					type: subscriptionType,
-					tierId: subscription.data.metadata.tierId,
+					tier: tierData,
 
 					addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 

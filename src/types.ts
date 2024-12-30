@@ -121,7 +121,7 @@ export type WebhookResponse = {
 
 export type BaseSubscriptionData = {
 	type: TierType;
-	tierId: string;
+	tier: PremiumTier;
 
 	userId: string;
 	guildId: string | null;
@@ -129,7 +129,7 @@ export type BaseSubscriptionData = {
 	addons: WithQuantity<StripeAddon>[];
 };
 
-export type InvoiceNeedsPayment = Omit<BaseSubscriptionData, 'tierId'> & {
+export type InvoiceNeedsPayment = Omit<BaseSubscriptionData, 'tier'> & {
 	status: PaymentStatus;
 	finalTotal: number;
 	hostedUrl: string | null;
@@ -158,9 +158,9 @@ export type SubscriptionUpdateData = BaseSubscriptionData & {
 
 export type SubscriptionCancelData = SubscriptionUpdateData;
 
-export type SubscriptionTierChangeData = Omit<SubscriptionUpdateData, 'tierId'> & {
-	newTierId: string;
-	oldTierId: string;
+export type SubscriptionTierChangeData = Omit<SubscriptionUpdateData, 'tier'> & {
+	newTier: PremiumTier;
+	oldTier: PremiumTier;
 };
 
 export type SubscriptionDeleteData = BaseSubscriptionData & {

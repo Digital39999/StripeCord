@@ -83,35 +83,35 @@ export type GetAllSubscriptionsQuery = {
 export type GetAllInvoicesQuery = GetAllSubscriptionsQuery;
 
 export type ManagerEvents = {
-	'subscriptionCreate': [data: SubscriptionCreateData];
-	'subscriptionCancel': [data: SubscriptionCancelData];
-	'subscriptionDelete': [data: SubscriptionDeleteData];
-	'subscriptionUpdate': [data: SubscriptionUpdateData];
-	'subscriptionTierChange': [data: SubscriptionTierChangeData];
-	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
-	'subscriptionRenew': [data: SubscriptionRenewData];
+    'subscriptionCreate': [data: SubscriptionCreateData];
+    'subscriptionCancel': [data: SubscriptionCancelData];
+    'subscriptionDelete': [data: SubscriptionDeleteData];
+    'subscriptionUpdate': [data: SubscriptionUpdateData];
+    'subscriptionTierChange': [data: SubscriptionTierChangeData];
+    'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+    'subscriptionRenew': [data: SubscriptionRenewData];
 
-	'guildSubscriptionCreate': [data: SubscriptionCreateData];
-	'guildSubscriptionCancel': [data: SubscriptionCancelData];
-	'guildSubscriptionDelete': [data: SubscriptionDeleteData];
-	'guildSubscriptionUpdate': [data: SubscriptionUpdateData];
-	'guildSubscriptionTierChange': [data: SubscriptionTierChangeData];
-	'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
-	'guildSubscriptionRenew': [data: SubscriptionRenewData];
+    'guildSubscriptionCreate': [data: SubscriptionCreateData<'guild'>];
+    'guildSubscriptionCancel': [data: SubscriptionCancelData<'guild'>];
+    'guildSubscriptionDelete': [data: SubscriptionDeleteData<'guild'>];
+    'guildSubscriptionUpdate': [data: SubscriptionUpdateData<'guild'>];
+    'guildSubscriptionTierChange': [data: SubscriptionTierChangeData<'guild'>];
+    'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'guild'>];
+    'guildSubscriptionRenew': [data: SubscriptionRenewData<'guild'>];
 
-	'userSubscriptionCreate': [data: SubscriptionCreateData];
-	'userSubscriptionCancel': [data: SubscriptionCancelData];
-	'userSubscriptionDelete': [data: SubscriptionDeleteData];
-	'userSubscriptionUpdate': [data: SubscriptionUpdateData];
-	'userSubscriptionTierChange': [data: SubscriptionTierChangeData];
-	'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
-	'userSubscriptionRenew': [data: SubscriptionRenewData];
+    'userSubscriptionCreate': [data: SubscriptionCreateData<'user'>];
+    'userSubscriptionCancel': [data: SubscriptionCancelData<'user'>];
+    'userSubscriptionDelete': [data: SubscriptionDeleteData<'user'>];
+    'userSubscriptionUpdate': [data: SubscriptionUpdateData<'user'>];
+    'userSubscriptionTierChange': [data: SubscriptionTierChangeData<'user'>];
+    'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'user'>];
+    'userSubscriptionRenew': [data: SubscriptionRenewData<'user'>];
 
-	'unprocessedWebhook': [data: unknown];
-	'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
-	'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
-	'disputeWarning': [data: DisputeWarningData];
-	'debug': [message: string];
+    'unprocessedWebhook': [data: unknown];
+    'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
+    'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
+    'disputeWarning': [data: DisputeWarningData];
+    'debug': [message: string];
 };
 
 export type WebhookResponse = {
@@ -147,7 +147,7 @@ export type SubscriptionCreateData<T extends TierType = TierType> = BaseSubscrip
 	};
 };
 
-export type SubscriptionRenewData = SubscriptionCreateData;
+export type SubscriptionRenewData<T extends TierType = TierType> = SubscriptionCreateData<T>;
 
 export type SubscriptionUpdateData<T extends TierType = TierType> = BaseSubscriptionData<T> & {
 	raw: {
@@ -156,9 +156,9 @@ export type SubscriptionUpdateData<T extends TierType = TierType> = BaseSubscrip
 	};
 };
 
-export type SubscriptionCancelData = SubscriptionUpdateData;
+export type SubscriptionCancelData<T extends TierType = TierType> = SubscriptionUpdateData<T>;
 
-export type SubscriptionTierChangeData = Omit<SubscriptionUpdateData, 'tier'> & {
+export type SubscriptionTierChangeData<T extends TierType = TierType> = Omit<SubscriptionUpdateData<T>, 'tier'> & {
 	newTier: PremiumTier;
 	oldTier: PremiumTier;
 };
@@ -169,7 +169,7 @@ export type SubscriptionDeleteData<T extends TierType = TierType> = BaseSubscrip
 	};
 };
 
-export type SubscriptionAddonChangeData = Omit<SubscriptionUpdateData, 'addons'> & {
+export type SubscriptionAddonChangeData<T extends TierType = TierType> = Omit<SubscriptionUpdateData<T>, 'addons'> & {
 	currentAddons: WithQuantity<StripeAddon>[];
 	addonUpdates: AddonUpdateType[];
 };

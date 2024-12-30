@@ -1,4 +1,4 @@
-import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionAddonChangeData, SubscriptionCancelData, SubscriptionCreateData, SubscriptionCreateInputData, SubscriptionDeleteData, SubscriptionTierChangeData, SubscriptionUpdateData, WebhookResponse, WithQuantity } from '../types';
 import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
 import { stringifyError } from '../utils';
@@ -126,7 +126,7 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionCreate`, eventData);
+							this.manager.emit(`${subscriptionType}SubscriptionCreate`, eventData as SubscriptionCreateData<'user'> & SubscriptionCreateData<'guild'>);
 							this.manager.emit('subscriptionCreate', eventData);
 							break;
 						}
@@ -146,7 +146,7 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionRenew`, eventData);
+							this.manager.emit(`${subscriptionType}SubscriptionRenew`, eventData as SubscriptionCreateData<'user'> & SubscriptionCreateData<'guild'>);
 							this.manager.emit('subscriptionRenew', eventData);
 							break;
 						}
@@ -193,7 +193,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionCancel`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionCancel`, eventData as SubscriptionCancelData<'user'> & SubscriptionCancelData<'guild'>);
 					this.manager.emit('subscriptionCancel', eventData);
 				}
 
@@ -220,7 +220,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionTierChange`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionTierChange`, eventData as SubscriptionTierChangeData<'user'> & SubscriptionTierChangeData<'guild'>);
 					this.manager.emit('subscriptionTierChange', eventData);
 				}
 
@@ -268,7 +268,7 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdate`, eventData);
+					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdate`, eventData as SubscriptionAddonChangeData<'user'> & SubscriptionAddonChangeData<'guild'>);
 					this.manager.emit('subscriptionAddonsUpdate', eventData);
 				}
 
@@ -287,7 +287,7 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionUpdate`, eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionUpdate`, eventData as SubscriptionUpdateData<'user'> & SubscriptionUpdateData<'guild'>);
 				this.manager.emit('subscriptionUpdate', eventData);
 
 				break;
@@ -328,7 +328,7 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionDelete`, eventData);
+				this.manager.emit(`${subscriptionType}SubscriptionDelete`, eventData as SubscriptionDeleteData<'user'> & SubscriptionDeleteData<'guild'>);
 				this.manager.emit('subscriptionDelete', eventData);
 				break;
 			}

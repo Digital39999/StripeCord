@@ -26,6 +26,8 @@ export default class StripeManager {
 
 		this.customers = new StripeCustomers(manager, this.stripe);
 		this.subscriptions = new StripeSubscriptions(manager, this.stripe, this);
+
+		this.stripeWebhookSecret = this.manager.config.stripeWebhookSecret || null;
 	}
 
 	public async syncAll() {
@@ -35,6 +37,11 @@ export default class StripeManager {
 	}
 
 	private async validateWebhook() {
+		if (this.stripeWebhookSecret) {
+			this.manager.emit('debug', 'Webhook secret already exists, skipping validation.');
+			return;
+		}
+
 		const pastWebhooks = await this.stripe.webhookEndpoints.list();
 		const webhook = pastWebhooks.data.filter((wh) => wh.url === this.manager.config.stripeWebhookUrl || wh.metadata._internal === 'StripeCord');
 

@@ -7,6 +7,7 @@ export type ConfigType = {
 
 	stripeApiKey: string;
 	stripeWebhookUrl: string;
+	stripeWebhookSecret?: string;
 
 	options?: {
 		stripe?: {

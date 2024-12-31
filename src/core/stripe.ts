@@ -29,15 +29,20 @@ export default class StripeManager {
 	}
 
 	public async syncAll() {
+		await this.validateWebhook();
 		await this.tiers.syncOrCreateTiers();
 		await this.addons.syncOrCreateAddons();
 	}
 
-	public async validateWebhook() {
+	private async validateWebhook() {
 		const pastWebhooks = await this.stripe.webhookEndpoints.list();
 		const webhook = pastWebhooks.data.filter((wh) => wh.url === this.manager.config.stripeWebhookUrl || wh.metadata._internal === 'StripeCord');
 
-		for (const wh of webhook) await this.stripe.webhookEndpoints.del(wh.id).catch(() => null);
+		for (const wh of webhook) await this.stripe.webhookEndpoints.del(wh.id).catch((err) => {
+			this.manager.emit('debug', `Failed to delete webhook with ID ${wh.id}: ${stringifyError(err)}`);
+		}).then(() => {
+			this.manager.emit('debug', `Deleted webhook with ID ${wh.id}.`);
+		});
 
 		const newWebhook = await this.stripe.webhookEndpoints.create({
 			url: this.manager.config.stripeWebhookUrl,
@@ -57,14 +62,15 @@ export default class StripeManager {
 			},
 		});
 
+		this.manager.emit('debug', `Created webhook with ID ${newWebhook.id}.`);
+
 		if (!newWebhook.secret) throw new Error('Failed to create webhook secret.');
 		this.stripeWebhookSecret = newWebhook.secret;
 		return newWebhook;
 	}
 
 	public async webhookHandler(payload: string | Buffer, signature: string): Promise<WebhookResponse> {
-		if (!this.stripeWebhookSecret) await this.validateWebhook();
-		if (!this.stripeWebhookSecret) throw new Error('Failed to validate webhook.');
+		if (!this.stripeWebhookSecret) throw new Error('Failed to validate webhook, have you called validateWebhook()?');
 
 		let event: Stripe.Event;
 

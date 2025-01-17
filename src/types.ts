@@ -30,7 +30,6 @@ export type PremiumTier = {
 	priceCents: number;
 	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
-	recurring?: Stripe.Price.Recurring.Interval;
 };
 
 export type Addon = {
@@ -40,16 +39,17 @@ export type Addon = {
 	priceCents: number;
 	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
-	recurring?: Stripe.Price.Recurring.Interval;
 };
 
 export type StripeTier = PremiumTier & {
-	stripePriceId: string;
+	monthyPriceId: string;
+	yearlyPriceId: string;
 	stripeProductId: string;
 };
 
 export type StripeAddon = Addon & {
-	stripePriceId: string;
+	yearlyPriceId: string;
+	monthyPriceId: string;
 	stripeProductId: string;
 };
 
@@ -94,22 +94,6 @@ export type ManagerEvents = {
 	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
 	'subscriptionRenew': [data: SubscriptionRenewData];
 
-	'guildSubscriptionCreate': [data: SubscriptionCreateData<'guild'>];
-	'guildSubscriptionCancel': [data: SubscriptionCancelData<'guild'>];
-	'guildSubscriptionDelete': [data: SubscriptionDeleteData<'guild'>];
-	'guildSubscriptionUpdate': [data: SubscriptionUpdateData<'guild'>];
-	'guildSubscriptionTierChange': [data: SubscriptionTierChangeData<'guild'>];
-	'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'guild'>];
-	'guildSubscriptionRenew': [data: SubscriptionRenewData<'guild'>];
-
-	'userSubscriptionCreate': [data: SubscriptionCreateData<'user'>];
-	'userSubscriptionCancel': [data: SubscriptionCancelData<'user'>];
-	'userSubscriptionDelete': [data: SubscriptionDeleteData<'user'>];
-	'userSubscriptionUpdate': [data: SubscriptionUpdateData<'user'>];
-	'userSubscriptionTierChange': [data: SubscriptionTierChangeData<'user'>];
-	'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'user'>];
-	'userSubscriptionRenew': [data: SubscriptionRenewData<'user'>];
-
 	'unprocessedWebhook': [data: unknown];
 	'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
 	'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
@@ -129,6 +113,7 @@ export type BaseSubscriptionData<T extends TierType = TierType> = {
 	userId: string;
 	guildId: T extends 'guild' ? string : null;
 
+	isAnnual: boolean;
 	addons: WithQuantity<StripeAddon>[];
 };
 

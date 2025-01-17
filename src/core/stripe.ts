@@ -1,4 +1,4 @@
-import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionAddonChangeData, SubscriptionCancelData, SubscriptionCreateData, SubscriptionCreateInputData, SubscriptionDeleteData, SubscriptionTierChangeData, SubscriptionUpdateData, WebhookResponse, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
 import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
 import { stringifyError } from '../utils';
@@ -128,6 +128,7 @@ export default class StripeManager {
 								type: subscriptionType,
 								tier: tierData,
 
+								isAnnual: subscription.data.metadata.isAnnual === 'true',
 								addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
 								userId: subscription.data.metadata.userId,
@@ -139,7 +140,6 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionCreate`, eventData as SubscriptionCreateData<'user'> & SubscriptionCreateData<'guild'>);
 							this.manager.emit('subscriptionCreate', eventData);
 							break;
 						}
@@ -148,6 +148,7 @@ export default class StripeManager {
 								type: subscriptionType,
 								tier: tierData,
 
+								isAnnual: subscription.data.metadata.isAnnual === 'true',
 								addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
 								userId: subscription.data.metadata.userId,
@@ -159,7 +160,6 @@ export default class StripeManager {
 								},
 							} as const;
 
-							this.manager.emit(`${subscriptionType}SubscriptionRenew`, eventData as SubscriptionCreateData<'user'> & SubscriptionCreateData<'guild'>);
 							this.manager.emit('subscriptionRenew', eventData);
 							break;
 						}
@@ -195,6 +195,7 @@ export default class StripeManager {
 						type: subscriptionType,
 						tier: tierData,
 
+						isAnnual: subscription.data.metadata.isAnnual === 'true',
 						addons: addonItems,
 
 						userId: subscription.data.metadata.userId,
@@ -206,7 +207,6 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionCancel`, eventData as SubscriptionCancelData<'user'> & SubscriptionCancelData<'guild'>);
 					this.manager.emit('subscriptionCancel', eventData);
 				}
 
@@ -222,6 +222,7 @@ export default class StripeManager {
 						newTier: newTierData,
 						oldTier: oldTierData,
 
+						isAnnual: subscription.data.metadata.isAnnual === 'true',
 						addons: addonItems,
 
 						userId: subscription.data.metadata.userId,
@@ -233,7 +234,6 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionTierChange`, eventData as SubscriptionTierChangeData<'user'> & SubscriptionTierChangeData<'guild'>);
 					this.manager.emit('subscriptionTierChange', eventData);
 				}
 
@@ -269,6 +269,7 @@ export default class StripeManager {
 						type: subscriptionType,
 						tier: tierData,
 
+						isAnnual: subscription.data.metadata.isAnnual === 'true',
 						currentAddons: addonsChange.currentAddons,
 						addonUpdates,
 
@@ -281,7 +282,6 @@ export default class StripeManager {
 						},
 					} as const;
 
-					this.manager.emit(`${subscriptionType}SubscriptionAddonsUpdate`, eventData as SubscriptionAddonChangeData<'user'> & SubscriptionAddonChangeData<'guild'>);
 					this.manager.emit('subscriptionAddonsUpdate', eventData);
 				}
 
@@ -289,6 +289,7 @@ export default class StripeManager {
 					type: subscriptionType,
 					tier: tierData,
 
+					isAnnual: subscription.data.metadata.isAnnual === 'true',
 					addons: addonItems,
 
 					userId: subscription.data.metadata.userId,
@@ -300,7 +301,6 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionUpdate`, eventData as SubscriptionUpdateData<'user'> & SubscriptionUpdateData<'guild'>);
 				this.manager.emit('subscriptionUpdate', eventData);
 
 				break;
@@ -331,6 +331,7 @@ export default class StripeManager {
 					type: subscriptionType,
 					tier: tierData,
 
+					isAnnual: subscription.data.metadata.isAnnual === 'true',
 					addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
 					userId: subscription.data.metadata.userId,
@@ -341,7 +342,6 @@ export default class StripeManager {
 					},
 				} as const;
 
-				this.manager.emit(`${subscriptionType}SubscriptionDelete`, eventData as SubscriptionDeleteData<'user'> & SubscriptionDeleteData<'guild'>);
 				this.manager.emit('subscriptionDelete', eventData);
 				break;
 			}
@@ -389,6 +389,7 @@ export default class StripeManager {
 					const eventData = {
 						type: subscriptionType,
 
+						isAnnual: subscription.data.metadata.isAnnual === 'true',
 						addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
 
 						status: status,
@@ -468,141 +469,85 @@ export default class StripeManager {
 export class StripeTiers {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
-	private async createTier(data: PremiumTier): Promise<Stripe.Price> {
-		const productPrices = await this.stripe.prices.list();
-		const existingPrice = productPrices.data.find((price) => price.unit_amount === data.priceCents && price.metadata._internal_id === data.tierId && price.metadata._internal_type === data.type);
-
+	private async createTier(data: PremiumTier): Promise<Stripe.Product> {
 		const products = await this.stripe.products.list();
-		const existingProduct = products.data.find((product) => product.metadata._internal_id === data.tierId && product.metadata._internal_type === data.type);
+		let product = products.data.find((p) => p.metadata._internal_id === data.tierId && p.metadata._internal_type === data.type);
 
-		if (existingProduct) {
-			if (existingPrice) {
-				await this.stripe.products.update(existingProduct.id, {
-					active: true,
-					default_price: existingPrice.id,
-				});
-
-				if (!existingPrice.active) return await this.stripe.prices.update(existingPrice.id, { active: true });
-				else return existingPrice;
-			} else {
-				const price = await this.stripe.prices.create({
-					active: true,
-					unit_amount: data.priceCents,
-					tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-					currency: data.currency ?? 'usd',
-					product: existingProduct.id,
-					metadata: {
-						_internal_type: data.type,
-						_internal_id: data.tierId,
-					},
-					recurring: {
-						interval: data.recurring || 'month',
-					},
-				});
-
-				await this.stripe.products.update(existingProduct.id, {
-					default_price: price.id,
-				});
-
-				return price;
-			}
-		} else {
-			const price = await this.stripe.prices.create({
-				active: data.isActive ?? true,
-				unit_amount: data.priceCents,
-				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-				currency: data.currency ?? 'usd',
+		if (!product) {
+			product = await this.stripe.products.create({
+				name: data.name,
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.tierId,
 				},
-				recurring: {
-					interval: data.recurring || 'month',
-				},
-				product_data: {
-					name: data.name,
-					metadata: {
-						_internal_type: data.type,
-						_internal_id: data.tierId,
-					},
-				},
 			});
-
-			await this.stripe.products.update(typeof price.product === 'string' ? price.product : price.product.id, {
-				default_price: price.id,
-			});
-
-			return price;
+		} else {
+			await this.stripe.products.update(product.id, { active: true });
 		}
+
+		const createOrUpdatePrice = async (interval: 'month' | 'year', amount: number): Promise<Stripe.Price> => {
+			const existingPrices = await this.stripe.prices.list({ product: product!.id });
+			const existingPrice = existingPrices.data.find((price) => price.unit_amount === amount && price.recurring?.interval === interval);
+
+			if (existingPrice) {
+				if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
+				return existingPrice;
+			}
+
+			return await this.stripe.prices.create({
+				unit_amount: amount,
+				currency: data.currency ?? 'usd',
+				product: product.id,
+				active: data.isActive ?? true,
+				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
+				recurring: {
+					interval,
+				},
+				metadata: {
+					_internal_type: data.type,
+					_internal_id: data.tierId,
+				},
+			});
+		};
+
+		const monthlyPrice = await createOrUpdatePrice('month', data.priceCents).catch(() => null);
+		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * 10).catch(() => null);
+		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to create or update prices for tier.');
+
+		await this.stripe.products.update(product.id, { default_price: monthlyPrice.id });
+		return product;
 	}
 
 	public async getStripeTiers(): Promise<StripeTier[]> {
 		const products = await this.stripe.products.list();
-		const prices = await this.stripe.prices.list();
-
 		const tiers: StripeTier[] = [];
 
-		for (const product of products.data) {
-			const priceId = typeof product.default_price === 'string' ? product.default_price : product.default_price?.id;
-			if (!priceId) continue;
+		for await (const product of products.data) {
+			const prices = await this.stripe.prices.list({ product: product.id });
 
-			const price = prices.data.find((price) => price.id === priceId);
-			if (!price) throw new Error(`Price not found for product ${product.id}.`);
-			if (price.active === false) await this.stripe.prices.update(price.id, { active: true });
+			const monthlyPrice = prices.data.find((price) => price.recurring?.interval === 'month');
+			const yearlyPrice = prices.data.find((price) => price.recurring?.interval === 'year');
+			if (!monthlyPrice || !yearlyPrice) continue;
 
 			const tierId = product.metadata._internal_id;
 			const tierType = product.metadata._internal_type;
 
 			if (!tierId || !tierType) continue;
-			else if (!['guild', 'user'].includes(tierType)) throw new Error(`Invalid tier type for price ${price.id}: ${tierType}`);
+			else if (!['guild', 'user'].includes(tierType)) throw new Error(`Invalid tier type for product ${product.id}: ${tierType}`);
 
 			tiers.push({
 				tierId,
 				type: tierType as 'guild' | 'user',
 				name: product.name,
 				isActive: product.active,
-				priceCents: price.unit_amount ?? 0,
+				priceCents: monthlyPrice.unit_amount ?? 0,
 				stripeProductId: product.id,
-				stripePriceId: price.id,
-				recurring: price.recurring?.interval ?? 'month',
+				monthyPriceId: monthlyPrice.id,
+				yearlyPriceId: yearlyPrice.id,
 			});
 		}
 
 		return tiers;
-	}
-
-	public async getStripeAddons(): Promise<StripeAddon[]> {
-		const products = await this.stripe.products.list();
-		const prices = await this.stripe.prices.list();
-
-		const addons: StripeAddon[] = [];
-
-		for (const product of products.data) {
-			const priceId = typeof product.default_price === 'string' ? product.default_price : product.default_price?.id;
-			if (!priceId) continue;
-
-			const price = prices.data.find((price) => price.id === priceId);
-			if (!price) throw new Error(`Price not found for product ${product.id}.`);
-
-			const addonId = product.metadata._internal_id;
-			const addonType = product.metadata._internal_type;
-
-			if (!addonId || !addonType) continue;
-			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
-
-			addons.push({
-				addonId,
-				type: addonType as 'guild' | 'user',
-				name: product.name,
-				isActive: product.active,
-				priceCents: price.unit_amount ?? 0,
-				stripeProductId: product.id,
-				stripePriceId: price.id,
-				recurring: price.recurring?.interval ?? 'month',
-			});
-		}
-
-		return addons;
 	}
 
 	private async changeActiveState(tierId: string, isActive: boolean): Promise<boolean> {
@@ -617,40 +562,67 @@ export class StripeTiers {
 		return true;
 	}
 
-	private async changePrice(tierId: string, priceCents: number, recurring: Stripe.Price.Recurring.Interval = 'month', currency?: string): Promise<boolean> {
+	private async changePrice(tierId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
 		else if (priceCents === tier.priceCents) return true;
 
-		const productPrices = await this.stripe.prices.list({ product: tier.stripeProductId });
-		const existingPrice = productPrices.data.find((price) => price.unit_amount === priceCents);
+		const monthlyPrice = await this.stripe.prices.retrieve(tier.monthyPriceId).catch(() => null);
+		const yearlyPrice = await this.stripe.prices.retrieve(tier.yearlyPriceId).catch(() => null);
+		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to retrieve prices for tier.');
 
-		if (existingPrice) {
-			if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
+		const allPrices = await this.stripe.prices.list();
 
-			await this.stripe.products.update(tier.stripeProductId, { default_price: existingPrice.id });
-			await this.stripe.prices.update(tier.stripePriceId, { active: false });
-			return true;
-		}
-
-		const newPrice = await this.stripe.prices.create({
+		const newMonthlyPrice = allPrices.data.find((price) =>
+			price.active === true &&
+			price.currency === currency &&
+			price.unit_amount === priceCents &&
+			price.recurring?.interval === 'month' &&
+			price.metadata._internal_id === tierId &&
+			price.metadata._internal_type === tier.type,
+		) || await this.stripe.prices.create({
 			unit_amount: priceCents,
 			currency: currency ?? 'usd',
 			product: tier.stripeProductId,
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
 			recurring: {
-				interval: recurring,
+				interval: 'month',
 			},
 			metadata: {
 				_internal_type: tier.type,
 				_internal_id: tier.tierId,
 			},
-		});
+		}).catch(() => null);
 
-		await this.stripe.prices.update(tier.stripePriceId, { active: false });
-		await this.stripe.products.update(tier.stripeProductId, { default_price: newPrice.id });
+		const newYearlyPrice = allPrices.data.find((price) =>
+			price.active === true &&
+			price.currency === currency &&
+			price.unit_amount === priceCents * 10 &&
+			price.recurring?.interval === 'year' &&
+			price.metadata._internal_id === tierId &&
+			price.metadata._internal_type === tier.type,
+		) || await this.stripe.prices.create({
+			unit_amount: priceCents * 10,
+			currency: currency ?? 'usd',
+			product: tier.stripeProductId,
+			active: true,
+			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
+			recurring: {
+				interval: 'year',
+			},
+			metadata: {
+				_internal_type: tier.type,
+				_internal_id: tier.tierId,
+			},
+		}).catch(() => null);
+
+		if (!newMonthlyPrice || !newYearlyPrice) throw new Error('Failed to create or update prices for tier.');
+
+		await this.stripe.products.update(tier.stripeProductId, { default_price: newMonthlyPrice.id });
+		if (newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
+		if (newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
 
 		return true;
 	}
@@ -664,7 +636,11 @@ export class StripeTiers {
 			active: false,
 		});
 
-		await this.stripe.prices.update(tier.stripePriceId, {
+		await this.stripe.prices.update(tier.monthyPriceId, {
+			active: false,
+		});
+
+		await this.stripe.prices.update(tier.yearlyPriceId, {
 			active: false,
 		});
 
@@ -696,12 +672,8 @@ export class StripeTiers {
 			const stripeTier = stripeTiers.find((t) => t.tierId === tier.tierId);
 			if (!stripeTier) continue;
 
-			if (stripeTier.recurring !== tier.recurring) {
-				throw new Error(`Recurring interval for tier ${tier.tierId} cannot be changed.`);
-			}
-
 			if (stripeTier.priceCents !== tier.priceCents) {
-				await this.changePrice(tier.tierId, tier.priceCents, tier.recurring, tier.currency);
+				await this.changePrice(tier.tierId, tier.priceCents, tier.currency);
 			}
 
 			if (stripeTier.isActive !== tier.isActive) {
@@ -730,6 +702,8 @@ export class StripeTiers {
 	}
 
 	public async getTiersFromItems(items: Stripe.SubscriptionItem[], stripeTiers?: StripeTier[]): Promise<StripeTier[]> {
+		if (!items.length) return [];
+
 		const tiers = stripeTiers || await this.getStripeTiers();
 		const tierIds = tiers.map((tier) => tier.tierId);
 
@@ -765,109 +739,81 @@ export class StripeTiers {
 export class StripeAddons {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
-	public async createAddon(data: Addon): Promise<Stripe.Price> {
-		const productPrices = await this.stripe.prices.list();
-		const existingPrice = productPrices.data.find((price) => price.unit_amount === data.priceCents && price.metadata._internal_id === data.addonId && price.metadata._internal_type === data.type && price.metadata._internal_isAddon === 'true');
-
+	private async createAddon(data: Addon): Promise<Stripe.Product> {
 		const products = await this.stripe.products.list();
-		const existingProduct = products.data.find((product) => product.metadata._internal_id === data.addonId && product.metadata._internal_type === data.type && product.metadata._internal_isAddon === 'true');
+		let product = products.data.find((p) => p.metadata._internal_id === data.addonId && p.metadata._internal_type === data.type);
 
-		if (existingProduct) {
-			if (existingPrice) {
-				await this.stripe.products.update(existingProduct.id, {
-					active: true,
-					default_price: existingPrice.id,
-				});
-
-				if (!existingPrice.active) return await this.stripe.prices.update(existingPrice.id, { active: true });
-				else return existingPrice;
-			} else {
-				const price = await this.stripe.prices.create({
-					active: true,
-					unit_amount: data.priceCents,
-					tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-					currency: data.currency ?? 'usd',
-					product: existingProduct.id,
-					recurring: {
-						interval: 'month',
-					},
-					metadata: {
-						_internal_type: data.type,
-						_internal_id: data.addonId,
-						_internal_isAddon: 'true',
-					},
-				});
-
-				await this.stripe.products.update(existingProduct.id, {
-					default_price: price.id,
-				});
-
-				return price;
-			}
-		} else {
-			const price = await this.stripe.prices.create({
-				active: data.isActive ?? true,
-				unit_amount: data.priceCents,
-				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
-				currency: data.currency ?? 'usd',
+		if (!product) {
+			product = await this.stripe.products.create({
+				name: data.name,
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.addonId,
-					_internal_isAddon: 'true',
-				},
-				recurring: {
-					interval: 'month',
-				},
-				product_data: {
-					name: data.name,
-					metadata: {
-						_internal_type: data.type,
-						_internal_id: data.addonId,
-						_internal_isAddon: 'true',
-					},
 				},
 			});
-
-			await this.stripe.products.update(typeof price.product === 'string' ? price.product : price.product.id, {
-				default_price: price.id,
-			});
-
-			return price;
+		} else {
+			await this.stripe.products.update(product.id, { active: true });
 		}
+
+		const createOrUpdatePrice = async (interval: 'month' | 'year', amount: number): Promise<Stripe.Price> => {
+			const existingPrices = await this.stripe.prices.list({ product: product!.id });
+			const existingPrice = existingPrices.data.find((price) => price.unit_amount === amount && price.recurring?.interval === interval);
+
+			if (existingPrice) {
+				if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
+				return existingPrice;
+			}
+
+			return await this.stripe.prices.create({
+				unit_amount: amount,
+				currency: data.currency ?? 'usd',
+				product: product.id,
+				active: data.isActive ?? true,
+				tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
+				recurring: {
+					interval,
+				},
+				metadata: {
+					_internal_type: data.type,
+					_internal_id: data.addonId,
+				},
+			});
+		};
+
+		const monthlyPrice = await createOrUpdatePrice('month', data.priceCents).catch(() => null);
+		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * 10).catch(() => null);
+		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to create or update prices for addon.');
+
+		await this.stripe.products.update(product.id, { default_price: monthlyPrice.id });
+		return product;
 	}
 
 	public async getStripeAddons(): Promise<StripeAddon[]> {
 		const products = await this.stripe.products.list();
-		const prices = await this.stripe.prices.list();
-
 		const addons: StripeAddon[] = [];
 
-		for (const product of products.data) {
-			const priceId = typeof product.default_price === 'string' ? product.default_price : product.default_price?.id;
-			if (!priceId) continue;
+		for await (const product of products.data) {
+			const prices = await this.stripe.prices.list({ product: product.id });
 
-			const price = prices.data.find((price) => price.id === priceId);
-			if (!price) throw new Error(`Price not found for product ${product.id}.`);
-			if (price.active === false) await this.stripe.prices.update(price.id, { active: true });
+			const monthlyPrice = prices.data.find((price) => price.recurring?.interval === 'month');
+			const yearlyPrice = prices.data.find((price) => price.recurring?.interval === 'year');
+			if (!monthlyPrice || !yearlyPrice) continue;
 
 			const addonId = product.metadata._internal_id;
 			const addonType = product.metadata._internal_type;
 
-			const isAddon = product.metadata._internal_isAddon;
-			if (isAddon !== 'true') continue;
-
 			if (!addonId || !addonType) continue;
-			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for price ${price.id}: ${addonType}`);
+			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for product ${product.id}: ${addonType}`);
 
 			addons.push({
 				addonId,
 				type: addonType as 'guild' | 'user',
 				name: product.name,
 				isActive: product.active,
-				priceCents: price.unit_amount ?? 0,
+				priceCents: monthlyPrice.unit_amount ?? 0,
 				stripeProductId: product.id,
-				stripePriceId: price.id,
-				recurring: price.recurring?.interval ?? 'month',
+				monthyPriceId: monthlyPrice.id,
+				yearlyPriceId: yearlyPrice.id,
 			});
 		}
 
@@ -886,41 +832,67 @@ export class StripeAddons {
 		return true;
 	}
 
-	private async changePrice(addonId: string, priceCents: number, recurring: Stripe.Price.Recurring.Interval = 'month', currency?: string): Promise<boolean> {
+	private async changePrice(addonId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
 		else if (priceCents === addon.priceCents) return true;
 
-		const productPrices = await this.stripe.prices.list({ product: addon.stripeProductId });
-		const existingPrice = productPrices.data.find((price) => price.unit_amount === priceCents);
+		const monthlyPrice = await this.stripe.prices.retrieve(addon.monthyPriceId).catch(() => null);
+		const yearlyPrice = await this.stripe.prices.retrieve(addon.yearlyPriceId).catch(() => null);
+		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to retrieve prices for addon.');
 
-		if (existingPrice) {
-			if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
+		const allPrices = await this.stripe.prices.list();
 
-			await this.stripe.products.update(addon.stripeProductId, { default_price: existingPrice.id });
-			await this.stripe.prices.update(addon.stripePriceId, { active: false });
-			return true;
-		}
-
-		const newPrice = await this.stripe.prices.create({
+		const newMonthlyPrice = allPrices.data.find((price) =>
+			price.active === true &&
+			price.currency === currency &&
+			price.unit_amount === priceCents &&
+			price.recurring?.interval === 'month' &&
+			price.metadata._internal_id === addonId &&
+			price.metadata._internal_type === addon.type,
+		) || await this.stripe.prices.create({
 			unit_amount: priceCents,
 			currency: currency ?? 'usd',
 			product: addon.stripeProductId,
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
 			recurring: {
-				interval: recurring,
+				interval: 'month',
 			},
 			metadata: {
 				_internal_type: addon.type,
 				_internal_id: addon.addonId,
-				_internal_isAddon: 'true',
 			},
-		});
+		}).catch(() => null);
 
-		await this.stripe.prices.update(addon.stripePriceId, { active: false });
-		await this.stripe.products.update(addon.stripeProductId, { default_price: newPrice.id });
+		const newYearlyPrice = allPrices.data.find((price) =>
+			price.active === true &&
+			price.currency === currency &&
+			price.unit_amount === priceCents * 10 &&
+			price.recurring?.interval === 'year' &&
+			price.metadata._internal_id === addonId &&
+			price.metadata._internal_type === addon.type,
+		) || await this.stripe.prices.create({
+			unit_amount: priceCents * 10,
+			currency: currency ?? 'usd',
+			product: addon.stripeProductId,
+			active: true,
+			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
+			recurring: {
+				interval: 'year',
+			},
+			metadata: {
+				_internal_type: addon.type,
+				_internal_id: addon.addonId,
+			},
+		}).catch(() => null);
+
+		if (!newMonthlyPrice || !newYearlyPrice) throw new Error('Failed to create or update prices for addon.');
+
+		await this.stripe.products.update(addon.stripeProductId, { default_price: newMonthlyPrice.id });
+		if (newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
+		if (newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
 
 		return true;
 	}
@@ -934,7 +906,11 @@ export class StripeAddons {
 			active: false,
 		});
 
-		await this.stripe.prices.update(addon.stripePriceId, {
+		await this.stripe.prices.update(addon.monthyPriceId, {
+			active: false,
+		});
+
+		await this.stripe.prices.update(addon.yearlyPriceId, {
 			active: false,
 		});
 
@@ -967,7 +943,7 @@ export class StripeAddons {
 			if (!stripeAddon) continue;
 
 			if (stripeAddon.priceCents !== addon.priceCents) {
-				await this.changePrice(addon.addonId, addon.priceCents, addon.recurring, addon.currency);
+				await this.changePrice(addon.addonId, addon.priceCents, addon.currency);
 			}
 
 			if (stripeAddon.isActive !== addon.isActive) {
@@ -1121,7 +1097,7 @@ export class StripeSubscriptions {
 
 				const daysForTrial = data.trialEndsAt ? Math.round((data.trialEndsAt.getTime() - Date.now()) / 86400000) : 0;
 				const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
-					price: tierData.stripePriceId,
+					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthyPriceId,
 					quantity: 1,
 				}];
 
@@ -1132,7 +1108,7 @@ export class StripeSubscriptions {
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
 
 					lineItems.push({
-						price: addonData.stripePriceId,
+						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
 						quantity: addon.quantity,
 					});
 				}
@@ -1157,6 +1133,7 @@ export class StripeSubscriptions {
 							tierId: tierData.tierId,
 							userId: customer.metadata.userId,
 							isUserSub: 'true',
+							isAnnual: data.isAnnual ? 'true' : 'false',
 						},
 					},
 					metadata: data.metadata ?? {},
@@ -1186,7 +1163,7 @@ export class StripeSubscriptions {
 
 				const daysForTrial = data.trialEndsAt ? Math.round((data.trialEndsAt.getTime() - Date.now()) / 86400000) : 0;
 				const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
-					price: tierData.stripePriceId,
+					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthyPriceId,
 					quantity: 1,
 				}];
 
@@ -1197,7 +1174,7 @@ export class StripeSubscriptions {
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
 
 					lineItems.push({
-						price: addonData.stripePriceId,
+						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
 						quantity: addon.quantity,
 					});
 				}
@@ -1223,6 +1200,7 @@ export class StripeSubscriptions {
 							tierId: tierData.tierId,
 							userId: customer.metadata.userId,
 							guildId: data.guildId,
+							isAnnual: data.isAnnual ? 'true' : 'false',
 						},
 					},
 					metadata: data.metadata ?? {},
@@ -1257,7 +1235,7 @@ export class StripeSubscriptions {
 
 		const newItems: Stripe.SubscriptionUpdateParams.Item[] = [{
 			id: itemThatIsMainTier.id,
-			price: newTierPrice.stripePriceId,
+			price: subscription.metadata.isAnnual ? newTierPrice.yearlyPriceId : newTierPrice.monthyPriceId,
 			quantity: 1,
 		}];
 
@@ -1361,7 +1339,7 @@ export class StripeSubscriptions {
 				});
 			} else {
 				newItems.push({
-					price: addonData.stripePriceId,
+					price: subscription.metadata.isAnnual === 'true' ? addonData.yearlyPriceId : addonData.monthyPriceId,
 					quantity: addon.quantity,
 				});
 			}

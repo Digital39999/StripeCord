@@ -553,7 +553,7 @@ export class StripeTiers {
 	private async changeActiveState(tierId: string, isActive: boolean): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
-		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
+		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#1).`);
 
 		await this.stripe.products.update(tier.stripeProductId, {
 			active: isActive,
@@ -565,7 +565,7 @@ export class StripeTiers {
 	private async changePrice(tierId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
-		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
+		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#2).`);
 		else if (priceCents === tier.priceCents) return true;
 
 		const monthlyPrice = await this.stripe.prices.retrieve(tier.monthyPriceId).catch(() => null);
@@ -630,7 +630,7 @@ export class StripeTiers {
 	private async deleteTier(tierId: string): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
-		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
+		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#3).`);
 
 		await this.stripe.products.update(tier.stripeProductId, {
 			active: false,
@@ -823,7 +823,7 @@ export class StripeAddons {
 	private async changeActiveState(addonId: string, isActive: boolean): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
-		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
+		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#1).`);
 
 		await this.stripe.products.update(addon.stripeProductId, {
 			active: isActive,
@@ -835,7 +835,7 @@ export class StripeAddons {
 	private async changePrice(addonId: string, priceCents: number, currency?: string): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
-		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
+		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#2).`);
 		else if (priceCents === addon.priceCents) return true;
 
 		const monthlyPrice = await this.stripe.prices.retrieve(addon.monthyPriceId).catch(() => null);
@@ -900,7 +900,7 @@ export class StripeAddons {
 	private async deleteAddon(addonId: string): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
-		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
+		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#3).`);
 
 		await this.stripe.products.update(addon.stripeProductId, {
 			active: false,
@@ -1053,7 +1053,7 @@ export class StripeSubscriptions {
 
 	public async cancelSubscription(subscriptionId: string, immediately = false): Promise<boolean> {
 		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
-		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
+		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId} (#1).`);
 
 		if (immediately) await this.stripe.subscriptions.cancel(subscriptionId, { invoice_now: true });
 		else await this.stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
@@ -1078,7 +1078,7 @@ export class StripeSubscriptions {
 		if (!stripeTiers) throw new Error('Failed to get tiers.');
 
 		const tierData = stripeTiers.find((tier) => tier.tierId === data.tierId);
-		if (!tierData) throw new Error(`Tier not found for ID ${data.tierId}.`);
+		if (!tierData) throw new Error(`Tier not found for ID ${data.tierId} (#4).`);
 
 		const joinIfExists = (s1: string | null, s2: string) => s1 ? `${s1}${s2}` : `https://example.com/checkout${s2}`;
 
@@ -1105,7 +1105,7 @@ export class StripeSubscriptions {
 
 				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
-					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
+					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId} (#4).`);
 
 					lineItems.push({
 						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
@@ -1171,7 +1171,7 @@ export class StripeSubscriptions {
 
 				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
-					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
+					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId} (#5).`);
 
 					lineItems.push({
 						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
@@ -1216,25 +1216,25 @@ export class StripeSubscriptions {
 
 	public async changeSubscriptionTier(subscriptionId: string, newTierId: string, options?: Partial<ChargeOptions>): Promise<boolean> {
 		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
-		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
+		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId} (#2).`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
-		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId}.`);
+		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId} (#1).`);
 		else if (subscription.metadata.tierId === newTierId) return true;
 
 		const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-		if (!customerId) throw new Error(`Missing customer ID in subscription ${subscriptionId}.`);
+		if (!customerId) throw new Error(`Missing customer ID in subscription ${subscriptionId} (#1).`);
 
 		const stripeTiers = await this.stripeManager.tiers.getStripeTiers();
 		if (!stripeTiers.length) throw new Error('Tiers not found.');
 
 		const newTierPrice = stripeTiers.find((tier) => tier.tierId === newTierId);
-		if (!newTierPrice) throw new Error(`Tier not found for ID ${newTierId}.`);
+		if (!newTierPrice) throw new Error(`Tier not found for ID ${newTierId} (#5).`);
 
 		const subscriptionType = subscription.metadata.isUserSub === 'true' ? 'user' : 'guild';
 		if (newTierPrice.type !== subscriptionType) throw new Error(`${subscriptionType === 'user' ? 'User' : 'Guild'} subscriptions cannot have tiers for the other type.`);
 
 		const itemThatIsMainTier = subscription.items.data.find((item) => item.price.metadata._internal_id === subscription.metadata.tierId);
-		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId}.`);
+		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId} (#1).`);
 
 		const newItems: Stripe.SubscriptionUpdateParams.Item[] = [{
 			id: itemThatIsMainTier.id,
@@ -1303,18 +1303,18 @@ export class StripeSubscriptions {
 
 	public async changeSubscriptionAddons(subscriptionId: string, newAddons: WithQuantity<Pick<Addon, 'addonId'>>[], options?: Partial<ChargeOptions>): Promise<boolean> {
 		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
-		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
+		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId} (#3).`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
-		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId}.`);
+		else if (!subscription.metadata.isUserSub && !subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId} (#2).`);
 
 		const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-		if (!customerId) throw new Error(`Missing customer ID in subscription ${subscriptionId}.`);
+		if (!customerId) throw new Error(`Missing customer ID in subscription ${subscriptionId} (#2).`);
 
 		const stripeAddons = await this.stripeManager.addons.getStripeAddons();
 		if (!stripeAddons.length) throw new Error('Addons not found.');
 
 		const itemThatIsMainTier = subscription.items.data.find((item) => item.price.metadata._internal_id === subscription.metadata.tierId);
-		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId}.`);
+		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId} (#2).`);
 
 		const newSelectedAddons = stripeAddons.filter((addon) => newAddons.some((newAddon) => newAddon.addonId === addon.addonId));
 
@@ -1333,7 +1333,7 @@ export class StripeSubscriptions {
 
 		for (const addon of newAddons) {
 			const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
-			if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId}.`);
+			if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId} (#6).`);
 
 			const existingItem = subscription.items.data.find((item) => item.price.metadata._internal_id === addon.addonId);
 			if (existingItem) {

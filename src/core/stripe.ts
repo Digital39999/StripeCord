@@ -1404,6 +1404,11 @@ export class StripeSubscriptions {
 
 		return true;
 	}
+
+	public async getAccumulatedSubscriptionCents(subscriptionItems: Stripe.SubscriptionItem[]): Promise<number> {
+		const subscriptionAmount = subscriptionItems.reduce((acc, item) => acc + (item.price.unit_amount || 0) * (item.quantity || 1), 0);
+		return subscriptionAmount;
+	}
 }
 
 export class StripeCustomers {

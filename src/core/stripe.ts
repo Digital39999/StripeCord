@@ -15,7 +15,7 @@ export default class StripeManager {
 
 	private stripeWebhookSecret: string | null = null;
 
-	constructor(private readonly manager: PremiumManager) {
+	constructor (private readonly manager: PremiumManager) {
 		if (!manager.config.stripeApiKey) throw new Error('Missing Stripe API key.');
 		else if (!manager.config.stripeWebhookUrl) throw new Error('Missing Stripe webhook url.');
 
@@ -466,7 +466,7 @@ export default class StripeManager {
 }
 
 export class StripeTiers {
-	constructor(private readonly manager: PremiumManager, private readonly stripe: Stripe) {}
+	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
 	private async createTier(data: PremiumTier): Promise<Stripe.Price> {
 		const productPrices = await this.stripe.prices.list();
@@ -496,7 +496,7 @@ export class StripeTiers {
 						_internal_id: data.tierId,
 					},
 					recurring: {
-						interval: 'month',
+						interval: data.recurring || 'month',
 					},
 				});
 
@@ -517,7 +517,7 @@ export class StripeTiers {
 					_internal_id: data.tierId,
 				},
 				recurring: {
-					interval: 'month',
+					interval: data.recurring || 'month',
 				},
 				product_data: {
 					name: data.name,
@@ -564,6 +564,7 @@ export class StripeTiers {
 				priceCents: price.unit_amount ?? 0,
 				stripeProductId: product.id,
 				stripePriceId: price.id,
+				recurring: price.recurring?.interval ?? 'month',
 			});
 		}
 
@@ -597,6 +598,7 @@ export class StripeTiers {
 				priceCents: price.unit_amount ?? 0,
 				stripeProductId: product.id,
 				stripePriceId: price.id,
+				recurring: price.recurring?.interval ?? 'month',
 			});
 		}
 
@@ -615,7 +617,7 @@ export class StripeTiers {
 		return true;
 	}
 
-	private async changePrice(tierId: string, priceCents: number, currency?: string): Promise<boolean> {
+	private async changePrice(tierId: string, priceCents: number, recurring: Stripe.Price.Recurring.Interval = 'month', currency?: string): Promise<boolean> {
 		const tiers = await this.getStripeTiers();
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId}.`);
@@ -639,7 +641,7 @@ export class StripeTiers {
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
 			recurring: {
-				interval: 'month',
+				interval: recurring,
 			},
 			metadata: {
 				_internal_type: tier.type,
@@ -694,8 +696,12 @@ export class StripeTiers {
 			const stripeTier = stripeTiers.find((t) => t.tierId === tier.tierId);
 			if (!stripeTier) continue;
 
+			if (stripeTier.recurring !== tier.recurring) {
+				throw new Error(`Recurring interval for tier ${tier.tierId} cannot be changed.`);
+			}
+
 			if (stripeTier.priceCents !== tier.priceCents) {
-				await this.changePrice(tier.tierId, tier.priceCents, tier.currency);
+				await this.changePrice(tier.tierId, tier.priceCents, tier.recurring, tier.currency);
 			}
 
 			if (stripeTier.isActive !== tier.isActive) {
@@ -757,7 +763,7 @@ export class StripeTiers {
 }
 
 export class StripeAddons {
-	constructor(private readonly manager: PremiumManager, private readonly stripe: Stripe) {}
+	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
 	public async createAddon(data: Addon): Promise<Stripe.Price> {
 		const productPrices = await this.stripe.prices.list();
@@ -861,6 +867,7 @@ export class StripeAddons {
 				priceCents: price.unit_amount ?? 0,
 				stripeProductId: product.id,
 				stripePriceId: price.id,
+				recurring: price.recurring?.interval ?? 'month',
 			});
 		}
 
@@ -879,7 +886,7 @@ export class StripeAddons {
 		return true;
 	}
 
-	private async changePrice(addonId: string, priceCents: number, currency?: string): Promise<boolean> {
+	private async changePrice(addonId: string, priceCents: number, recurring: Stripe.Price.Recurring.Interval = 'month', currency?: string): Promise<boolean> {
 		const addons = await this.getStripeAddons();
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId}.`);
@@ -903,7 +910,7 @@ export class StripeAddons {
 			active: true,
 			tax_behavior: this.manager.config.options?.stripe?.includeTaxInPrice ? 'inclusive' : 'exclusive',
 			recurring: {
-				interval: 'month',
+				interval: recurring,
 			},
 			metadata: {
 				_internal_type: addon.type,
@@ -960,7 +967,7 @@ export class StripeAddons {
 			if (!stripeAddon) continue;
 
 			if (stripeAddon.priceCents !== addon.priceCents) {
-				await this.changePrice(addon.addonId, addon.priceCents, addon.currency);
+				await this.changePrice(addon.addonId, addon.priceCents, addon.recurring, addon.currency);
 			}
 
 			if (stripeAddon.isActive !== addon.isActive) {
@@ -1032,11 +1039,10 @@ export class StripeAddons {
 		else if (!currentAddons.length && !previousAddons.length && !changedQuantity.length) return null;
 		else return { currentAddons, previousAddons, changedQuantity };
 	}
-
 }
 
 export class StripeSubscriptions {
-	constructor(private readonly manager: PremiumManager, private readonly stripe: Stripe, private readonly stripeManager: StripeManager) {}
+	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe, private readonly stripeManager: StripeManager) { }
 
 	public async getSubscriptionsFor(options: CustomerQueryData): Promise<{ user: Stripe.Subscription | null; guild: Stripe.Subscription[]; }> {
 		const customer = await this.stripeManager.customers.getCustomer(options);
@@ -1418,7 +1424,7 @@ export class StripeSubscriptions {
 }
 
 export class StripeCustomers {
-	constructor(private readonly manager: PremiumManager, private readonly stripe: Stripe) {}
+	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
 	public async createCustomer(data: CustomerCreateData): Promise<Stripe.Customer> {
 		const check = await this.getCustomer(data);

@@ -30,6 +30,7 @@ export type PremiumTier = {
 	priceCents: number;
 	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
+	recurring?: Stripe.Price.Recurring.Interval;
 };
 
 export type Addon = {
@@ -39,6 +40,7 @@ export type Addon = {
 	priceCents: number;
 	currency?: string; // https://docs.stripe.com/currencies
 	isActive: boolean;
+	recurring?: Stripe.Price.Recurring.Interval;
 };
 
 export type StripeTier = PremiumTier & {
@@ -84,35 +86,35 @@ export type GetAllSubscriptionsQuery = {
 export type GetAllInvoicesQuery = GetAllSubscriptionsQuery;
 
 export type ManagerEvents = {
-    'subscriptionCreate': [data: SubscriptionCreateData];
-    'subscriptionCancel': [data: SubscriptionCancelData];
-    'subscriptionDelete': [data: SubscriptionDeleteData];
-    'subscriptionUpdate': [data: SubscriptionUpdateData];
-    'subscriptionTierChange': [data: SubscriptionTierChangeData];
-    'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
-    'subscriptionRenew': [data: SubscriptionRenewData];
+	'subscriptionCreate': [data: SubscriptionCreateData];
+	'subscriptionCancel': [data: SubscriptionCancelData];
+	'subscriptionDelete': [data: SubscriptionDeleteData];
+	'subscriptionUpdate': [data: SubscriptionUpdateData];
+	'subscriptionTierChange': [data: SubscriptionTierChangeData];
+	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
+	'subscriptionRenew': [data: SubscriptionRenewData];
 
-    'guildSubscriptionCreate': [data: SubscriptionCreateData<'guild'>];
-    'guildSubscriptionCancel': [data: SubscriptionCancelData<'guild'>];
-    'guildSubscriptionDelete': [data: SubscriptionDeleteData<'guild'>];
-    'guildSubscriptionUpdate': [data: SubscriptionUpdateData<'guild'>];
-    'guildSubscriptionTierChange': [data: SubscriptionTierChangeData<'guild'>];
-    'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'guild'>];
-    'guildSubscriptionRenew': [data: SubscriptionRenewData<'guild'>];
+	'guildSubscriptionCreate': [data: SubscriptionCreateData<'guild'>];
+	'guildSubscriptionCancel': [data: SubscriptionCancelData<'guild'>];
+	'guildSubscriptionDelete': [data: SubscriptionDeleteData<'guild'>];
+	'guildSubscriptionUpdate': [data: SubscriptionUpdateData<'guild'>];
+	'guildSubscriptionTierChange': [data: SubscriptionTierChangeData<'guild'>];
+	'guildSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'guild'>];
+	'guildSubscriptionRenew': [data: SubscriptionRenewData<'guild'>];
 
-    'userSubscriptionCreate': [data: SubscriptionCreateData<'user'>];
-    'userSubscriptionCancel': [data: SubscriptionCancelData<'user'>];
-    'userSubscriptionDelete': [data: SubscriptionDeleteData<'user'>];
-    'userSubscriptionUpdate': [data: SubscriptionUpdateData<'user'>];
-    'userSubscriptionTierChange': [data: SubscriptionTierChangeData<'user'>];
-    'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'user'>];
-    'userSubscriptionRenew': [data: SubscriptionRenewData<'user'>];
+	'userSubscriptionCreate': [data: SubscriptionCreateData<'user'>];
+	'userSubscriptionCancel': [data: SubscriptionCancelData<'user'>];
+	'userSubscriptionDelete': [data: SubscriptionDeleteData<'user'>];
+	'userSubscriptionUpdate': [data: SubscriptionUpdateData<'user'>];
+	'userSubscriptionTierChange': [data: SubscriptionTierChangeData<'user'>];
+	'userSubscriptionAddonsUpdate': [data: SubscriptionAddonChangeData<'user'>];
+	'userSubscriptionRenew': [data: SubscriptionRenewData<'user'>];
 
-    'unprocessedWebhook': [data: unknown];
-    'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
-    'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
-    'disputeWarning': [data: DisputeWarningData];
-    'debug': [message: string];
+	'unprocessedWebhook': [data: unknown];
+	'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
+	'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
+	'disputeWarning': [data: DisputeWarningData];
+	'debug': [message: string];
 };
 
 export type WebhookResponse = {
@@ -192,6 +194,7 @@ export type SubscriptionCreateInputData = {
 	trialEndsAt?: Date;
 
 	metadata?: Record<string, string>;
+	isAnnual?: boolean;
 };
 
 export type ChargeOptions = {

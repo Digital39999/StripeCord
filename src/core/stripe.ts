@@ -1230,6 +1230,9 @@ export class StripeSubscriptions {
 		const newTierPrice = stripeTiers.find((tier) => tier.tierId === newTierId);
 		if (!newTierPrice) throw new Error(`Tier not found for ID ${newTierId}.`);
 
+		const subscriptionType = subscription.metadata.isUserSub === 'true' ? 'user' : 'guild';
+		if (newTierPrice.type !== subscriptionType) throw new Error(`${subscriptionType === 'user' ? 'User' : 'Guild'} subscriptions cannot have tiers for the other type.`);
+
 		const itemThatIsMainTier = subscription.items.data.find((item) => item.price.metadata._internal_id === subscription.metadata.tierId);
 		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId}.`);
 
@@ -1298,7 +1301,7 @@ export class StripeSubscriptions {
 		return true;
 	}
 
-	public async changeSubscriptionAddons(subscriptionId: string, newAddons: WithQuantity<Addon>[], options?: Partial<ChargeOptions>): Promise<boolean> {
+	public async changeSubscriptionAddons(subscriptionId: string, newAddons: WithQuantity<Pick<Addon, 'addonId'>>[], options?: Partial<ChargeOptions>): Promise<boolean> {
 		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
 		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId}.`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
@@ -1313,8 +1316,10 @@ export class StripeSubscriptions {
 		const itemThatIsMainTier = subscription.items.data.find((item) => item.price.metadata._internal_id === subscription.metadata.tierId);
 		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId}.`);
 
+		const newSelectedAddons = stripeAddons.filter((addon) => newAddons.some((newAddon) => newAddon.addonId === addon.addonId));
+
 		const subscriptionType = subscription.metadata.isUserSub === 'true' ? 'user' : 'guild';
-		const isAnyAddonNotCorrectType = newAddons.some((addon) => addon.type !== subscriptionType);
+		const isAnyAddonNotCorrectType = newSelectedAddons.some((addon) => addon.type !== subscriptionType);
 		if (isAnyAddonNotCorrectType) throw new Error(`${subscriptionType === 'user' ? 'User' : 'Guild'} subscriptions cannot have addons for the other type.`);
 
 		const currentAddonItems = subscription.items.data.filter((item) => item.price.metadata._internal_id !== subscription.metadata.tierId);

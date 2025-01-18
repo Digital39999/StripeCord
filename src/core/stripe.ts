@@ -464,14 +464,29 @@ export default class StripeManager {
 			message: 'Webhook processed successfully.',
 		};
 	}
+
+	public async internalGetAllProducts(options?: Stripe.ProductListParams, acc: Stripe.Product[] = [], startingAfter?: string): Promise<Stripe.Product[]> {
+		const products = await this.stripe.products.list({ ...options, limit: 100, starting_after: startingAfter });
+		acc.push(...products.data);
+
+		if (products.has_more) return this.internalGetAllProducts(options, acc, products.data[products.data.length - 1]?.id);
+		else return acc;
+	}
+
+	public async internalGetAllPrices(options?: Stripe.PriceListParams, acc: Stripe.Price[] = [], startingAfter?: string): Promise<Stripe.Price[]> {
+		const prices = await this.stripe.prices.list({ ...options, limit: 100, starting_after: startingAfter });
+		acc.push(...prices.data);
+
+		if (prices.has_more) return this.internalGetAllPrices(options, acc, prices.data[prices.data.length - 1]?.id);
+		else return acc;
+	}
 }
 
 export class StripeTiers {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
-	private async createTier(data: PremiumTier): Promise<Stripe.Product> {
-		const products = await this.stripe.products.list();
-		let product = products.data.find((p) => p.metadata._internal_id === data.tierId && p.metadata._internal_type === data.type);
+	private async createTier(data: PremiumTier, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<Stripe.Product> {
+		let product = allProducts.find((p) => p.metadata._internal_id === data.tierId && p.metadata._internal_type === data.type && p.metadata._internal_which === 'tier');
 
 		if (!product) {
 			product = await this.stripe.products.create({
@@ -479,15 +494,17 @@ export class StripeTiers {
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.tierId,
+					_internal_which: 'tier',
 				},
 			});
-		} else {
-			await this.stripe.products.update(product.id, { active: true });
+		} else if (!product.active) {
+			await this.stripe.products.update(product.id, { active: true, name: data.name });
+		} else if (product.name !== data.name) {
+			await this.stripe.products.update(product.id, { name: data.name });
 		}
 
 		const createOrUpdatePrice = async (interval: 'month' | 'year', amount: number): Promise<Stripe.Price> => {
-			const existingPrices = await this.stripe.prices.list({ product: product!.id });
-			const existingPrice = existingPrices.data.find((price) => price.unit_amount === amount && price.recurring?.interval === interval);
+			const existingPrice = allPrices.find((price) => price.unit_amount === amount && price.recurring?.interval === interval && price.product === product.id);
 
 			if (existingPrice) {
 				if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
@@ -506,6 +523,7 @@ export class StripeTiers {
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.tierId,
+					_internal_which: 'tier',
 				},
 			});
 		};
@@ -519,21 +537,30 @@ export class StripeTiers {
 	}
 
 	public async getStripeTiers(): Promise<StripeTier[]> {
-		const products = await this.stripe.products.list();
+		return this.getStripeTiersInternal();
+	}
+
+	private async getStripeTiersInternal(getExtra?: boolean, internalAllProducts?: Stripe.Product[], internalAllPrices?: Stripe.Price[]): Promise<StripeTier[]> {
+		const allProducts = internalAllProducts || await this.manager.stripeManager.internalGetAllProducts();
+		const allPrices = internalAllPrices || await this.manager.stripeManager.internalGetAllPrices();
+
 		const tiers: StripeTier[] = [];
 
-		for await (const product of products.data) {
-			const prices = await this.stripe.prices.list({ product: product.id });
-
-			const monthlyPrice = prices.data.find((price) => price.recurring?.interval === 'month');
-			const yearlyPrice = prices.data.find((price) => price.recurring?.interval === 'year');
+		for await (const product of allProducts) {
+			const monthlyPrice = allPrices.find((price) => price.recurring?.interval === 'month' && price.product === product.id);
+			const yearlyPrice = allPrices.find((price) => price.recurring?.interval === 'year' && price.product === product.id);
 			if (!monthlyPrice || !yearlyPrice) continue;
 
 			const tierId = product.metadata._internal_id;
 			const tierType = product.metadata._internal_type;
+			const tierWhich = product.metadata._internal_which;
 
-			if (!tierId || !tierType) continue;
-			else if (!['guild', 'user'].includes(tierType)) throw new Error(`Invalid tier type for product ${product.id}: ${tierType}`);
+			if (!tierId || !tierType || !tierWhich) continue;
+			else if (tierWhich !== 'tier' || (!this.manager.config.premiumTiers.some((tier) => tier.tierId === tierId) && !getExtra)) continue;
+			else if (!['guild', 'user'].includes(tierType)) throw new Error(`Invalid tier type for product ${product.id} (${tierId}): ${tierType}.`);
+
+			const exists = tiers.find((tier) => tier.tierId === tierId);
+			if (exists) continue;
 
 			tiers.push({
 				tierId,
@@ -550,10 +577,11 @@ export class StripeTiers {
 		return tiers;
 	}
 
-	private async changeActiveState(tierId: string, isActive: boolean): Promise<boolean> {
-		const tiers = await this.getStripeTiers();
+	private async changeActiveState(tierId: string, isActive: boolean, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<boolean> {
+		const tiers = await this.getStripeTiersInternal(true, allProducts, allPrices);
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#1).`);
+		else if (tier.isActive === isActive) return true;
 
 		await this.stripe.products.update(tier.stripeProductId, {
 			active: isActive,
@@ -562,24 +590,23 @@ export class StripeTiers {
 		return true;
 	}
 
-	private async changePrice(tierId: string, priceCents: number, currency?: string): Promise<boolean> {
-		const tiers = await this.getStripeTiers();
+	private async changePrice(tierId: string, priceCents: number, currency: string, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<boolean> {
+		const tiers = await this.getStripeTiersInternal(true, allProducts, allPrices);
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#2).`);
 		else if (priceCents === tier.priceCents) return true;
 
 		const monthlyPrice = await this.stripe.prices.retrieve(tier.monthyPriceId).catch(() => null);
 		const yearlyPrice = await this.stripe.prices.retrieve(tier.yearlyPriceId).catch(() => null);
-		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to retrieve prices for tier.');
 
-		const allPrices = await this.stripe.prices.list();
-
-		const newMonthlyPrice = allPrices.data.find((price) =>
+		const newMonthlyPrice = allPrices.find((price) =>
 			price.active === true &&
 			price.currency === currency &&
 			price.unit_amount === priceCents &&
 			price.recurring?.interval === 'month' &&
+			price.product === tier.stripeProductId &&
 			price.metadata._internal_id === tierId &&
+			price.metadata._internal_which === 'tier' &&
 			price.metadata._internal_type === tier.type,
 		) || await this.stripe.prices.create({
 			unit_amount: priceCents,
@@ -593,15 +620,18 @@ export class StripeTiers {
 			metadata: {
 				_internal_type: tier.type,
 				_internal_id: tier.tierId,
+				_internal_which: 'tier',
 			},
 		}).catch(() => null);
 
-		const newYearlyPrice = allPrices.data.find((price) =>
+		const newYearlyPrice = allPrices.find((price) =>
 			price.active === true &&
 			price.currency === currency &&
-			price.unit_amount === priceCents * 10 &&
 			price.recurring?.interval === 'year' &&
+			price.unit_amount === priceCents * 10 &&
+			price.product === tier.stripeProductId &&
 			price.metadata._internal_id === tierId &&
+			price.metadata._internal_which === 'tier' &&
 			price.metadata._internal_type === tier.type,
 		) || await this.stripe.prices.create({
 			unit_amount: priceCents * 10,
@@ -615,20 +645,21 @@ export class StripeTiers {
 			metadata: {
 				_internal_type: tier.type,
 				_internal_id: tier.tierId,
+				_internal_which: 'tier',
 			},
 		}).catch(() => null);
 
 		if (!newMonthlyPrice || !newYearlyPrice) throw new Error('Failed to create or update prices for tier.');
 
 		await this.stripe.products.update(tier.stripeProductId, { default_price: newMonthlyPrice.id });
-		if (newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
-		if (newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
+		if (monthlyPrice && newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
+		if (yearlyPrice && newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
 
 		return true;
 	}
 
-	private async deleteTier(tierId: string): Promise<boolean> {
-		const tiers = await this.getStripeTiers();
+	private async deleteTier(tierId: string, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<boolean> {
+		const tiers = await this.getStripeTiersInternal(true, allProducts, allPrices);
 		const tier = tiers.find((tier) => tier.tierId === tierId);
 		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#3).`);
 
@@ -648,36 +679,38 @@ export class StripeTiers {
 	}
 
 	public async syncOrCreateTiers(): Promise<void> {
-		const stripeTiers = await this.getStripeTiers();
+		const allProducts = await this.manager.stripeManager.internalGetAllProducts();
+		const allPrices = await this.manager.stripeManager.internalGetAllPrices();
+
+		const stripeTiers = await this.getStripeTiersInternal(true, allProducts, allPrices);
 		const stripeTierIds = stripeTiers.map((tier) => tier.tierId);
 
 		const missingTiers = this.manager.config.premiumTiers.filter((tier) => !stripeTierIds.includes(tier.tierId));
 		const foundTiers = this.manager.config.premiumTiers.filter((tier) => stripeTierIds.includes(tier.tierId));
-		const extraTiers = stripeTiers.filter((tier) => !this.manager.config.premiumTiers.some((t) => t.tierId === tier.tierId));
+		const extraTiers = stripeTiers.filter((tier) => !this.manager.config.premiumTiers.some((t) => t.tierId === tier.tierId) && tier.isActive);
 
-		await this.createMissingTiers(missingTiers);
-		await this.updateExistingTiers(foundTiers, stripeTiers);
+		await this.createMissingTiers(missingTiers, allProducts, allPrices);
+		await this.updateExistingTiers(foundTiers, stripeTiers, allProducts, allPrices);
+		await this.deleteExtraTiers(extraTiers, allProducts, allPrices);
+	}
 
-		if (this.manager.config.options?.stripe?.deleteUnknownTiers) {
-			await this.deleteExtraTiers(extraTiers);
+	private async createMissingTiers(missingTiers: PremiumTier[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
+		for await (const tier of missingTiers) {
+			await this.createTier(tier, allProducts, allPrices).catch(() => null);
 		}
 	}
 
-	private async createMissingTiers(missingTiers: PremiumTier[]): Promise<void> {
-		await Promise.allSettled(missingTiers.map((tier) => this.createTier(tier)));
-	}
-
-	private async updateExistingTiers(foundTiers: PremiumTier[], stripeTiers: StripeTier[]): Promise<void> {
+	private async updateExistingTiers(foundTiers: PremiumTier[], stripeTiers: StripeTier[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
 		for (const tier of foundTiers) {
 			const stripeTier = stripeTiers.find((t) => t.tierId === tier.tierId);
 			if (!stripeTier) continue;
 
 			if (stripeTier.priceCents !== tier.priceCents) {
-				await this.changePrice(tier.tierId, tier.priceCents, tier.currency);
+				await this.changePrice(tier.tierId, tier.priceCents, tier.currency || 'usd', allProducts, allPrices);
 			}
 
 			if (stripeTier.isActive !== tier.isActive) {
-				await this.changeActiveState(tier.tierId, tier.isActive);
+				await this.changeActiveState(tier.tierId, tier.isActive, allProducts, allPrices);
 			}
 
 			if (stripeTier.name !== tier.name) {
@@ -691,20 +724,23 @@ export class StripeTiers {
 					metadata: {
 						_internal_type: tier.type,
 						_internal_id: tier.tierId,
+						_internal_which: 'tier',
 					},
 				});
 			}
 		}
 	}
 
-	private async deleteExtraTiers(extraTiers: StripeTier[]): Promise<void> {
-		await Promise.allSettled(extraTiers.map((tier) => this.deleteTier(tier.tierId)));
+	private async deleteExtraTiers(extraTiers: StripeTier[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
+		for await (const tier of extraTiers) {
+			await this.deleteTier(tier.tierId, allProducts, allPrices);
+		}
 	}
 
 	public async getTiersFromItems(items: Stripe.SubscriptionItem[], stripeTiers?: StripeTier[]): Promise<StripeTier[]> {
 		if (!items.length) return [];
 
-		const tiers = stripeTiers || await this.getStripeTiers();
+		const tiers = stripeTiers || await this.getStripeTiersInternal();
 		const tierIds = tiers.map((tier) => tier.tierId);
 
 		const subscriptionTiers = items.filter((item) => item.price.metadata._internal_id && tierIds.includes(item.price.metadata._internal_id));
@@ -719,7 +755,7 @@ export class StripeTiers {
 	}
 
 	public async checkIfTierChange(newItems: Stripe.SubscriptionItem[], oldItems: Stripe.SubscriptionItem[]): Promise<{ newTierId: string; oldTierId: string; } | null> {
-		const stripeTiers = await this.getStripeTiers();
+		const stripeTiers = await this.getStripeTiersInternal();
 
 		const newTiers = await this.getTiersFromItems(newItems, stripeTiers);
 		const oldTiers = await this.getTiersFromItems(oldItems, stripeTiers);
@@ -739,9 +775,8 @@ export class StripeTiers {
 export class StripeAddons {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
-	private async createAddon(data: Addon): Promise<Stripe.Product> {
-		const products = await this.stripe.products.list();
-		let product = products.data.find((p) => p.metadata._internal_id === data.addonId && p.metadata._internal_type === data.type);
+	private async createAddon(data: Addon, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<Stripe.Product> {
+		let product = allProducts.find((p) => p.metadata._internal_id === data.addonId && p.metadata._internal_type === data.type && p.metadata._internal_which === 'addon');
 
 		if (!product) {
 			product = await this.stripe.products.create({
@@ -749,15 +784,17 @@ export class StripeAddons {
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.addonId,
+					_internal_which: 'addon',
 				},
 			});
-		} else {
+		} else if (!product.active) {
 			await this.stripe.products.update(product.id, { active: true });
+		} else if (product.name !== data.name) {
+			await this.stripe.products.update(product.id, { name: data.name });
 		}
 
 		const createOrUpdatePrice = async (interval: 'month' | 'year', amount: number): Promise<Stripe.Price> => {
-			const existingPrices = await this.stripe.prices.list({ product: product!.id });
-			const existingPrice = existingPrices.data.find((price) => price.unit_amount === amount && price.recurring?.interval === interval);
+			const existingPrice = allPrices.find((price) => price.unit_amount === amount && price.recurring?.interval === interval && price.product === product.id);
 
 			if (existingPrice) {
 				if (!existingPrice.active) await this.stripe.prices.update(existingPrice.id, { active: true });
@@ -776,6 +813,7 @@ export class StripeAddons {
 				metadata: {
 					_internal_type: data.type,
 					_internal_id: data.addonId,
+					_internal_which: 'addon',
 				},
 			});
 		};
@@ -789,21 +827,30 @@ export class StripeAddons {
 	}
 
 	public async getStripeAddons(): Promise<StripeAddon[]> {
-		const products = await this.stripe.products.list();
+		return this.getStripeAddonsInternal();
+	}
+
+	private async getStripeAddonsInternal(getExtra?: boolean, internalAllProducts?: Stripe.Product[], internalAllPrices?: Stripe.Price[]): Promise<StripeAddon[]> {
+		const allProducts = internalAllProducts || await this.manager.stripeManager.internalGetAllProducts();
+		const allPrices = internalAllPrices || await this.manager.stripeManager.internalGetAllPrices();
+
 		const addons: StripeAddon[] = [];
 
-		for await (const product of products.data) {
-			const prices = await this.stripe.prices.list({ product: product.id });
-
-			const monthlyPrice = prices.data.find((price) => price.recurring?.interval === 'month');
-			const yearlyPrice = prices.data.find((price) => price.recurring?.interval === 'year');
+		for await (const product of allProducts) {
+			const monthlyPrice = allPrices.find((price) => price.recurring?.interval === 'month' && price.product === product.id);
+			const yearlyPrice = allPrices.find((price) => price.recurring?.interval === 'year' && price.product === product.id);
 			if (!monthlyPrice || !yearlyPrice) continue;
 
 			const addonId = product.metadata._internal_id;
 			const addonType = product.metadata._internal_type;
+			const addonWhich = product.metadata._internal_which;
 
-			if (!addonId || !addonType) continue;
-			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for product ${product.id}: ${addonType}`);
+			if (!addonId || !addonType || !addonWhich) continue;
+			else if (addonWhich !== 'addon' || (!this.manager.config.addons.some((addon) => addon.addonId === addonId) && !getExtra)) continue;
+			else if (!['guild', 'user'].includes(addonType)) throw new Error(`Invalid addon type for product ${product.id} (${addonId}): ${addonType}`);
+
+			const exists = addons.find((addon) => addon.addonId === addonId);
+			if (exists) continue;
 
 			addons.push({
 				addonId,
@@ -820,8 +867,8 @@ export class StripeAddons {
 		return addons;
 	}
 
-	private async changeActiveState(addonId: string, isActive: boolean): Promise<boolean> {
-		const addons = await this.getStripeAddons();
+	private async changeActiveState(addonId: string, isActive: boolean, allProducts: Stripe.Product[]): Promise<boolean> {
+		const addons = await this.getStripeAddonsInternal(true, allProducts);
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#1).`);
 
@@ -832,24 +879,23 @@ export class StripeAddons {
 		return true;
 	}
 
-	private async changePrice(addonId: string, priceCents: number, currency?: string): Promise<boolean> {
-		const addons = await this.getStripeAddons();
+	private async changePrice(addonId: string, priceCents: number, currency: string, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<boolean> {
+		const addons = await this.getStripeAddonsInternal(true, allProducts, allPrices);
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#2).`);
 		else if (priceCents === addon.priceCents) return true;
 
 		const monthlyPrice = await this.stripe.prices.retrieve(addon.monthyPriceId).catch(() => null);
 		const yearlyPrice = await this.stripe.prices.retrieve(addon.yearlyPriceId).catch(() => null);
-		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to retrieve prices for addon.');
 
-		const allPrices = await this.stripe.prices.list();
-
-		const newMonthlyPrice = allPrices.data.find((price) =>
+		const newMonthlyPrice = allPrices.find((price) =>
 			price.active === true &&
 			price.currency === currency &&
 			price.unit_amount === priceCents &&
 			price.recurring?.interval === 'month' &&
+			price.product === addon.stripeProductId &&
 			price.metadata._internal_id === addonId &&
+			price.metadata._internal_which === 'addon' &&
 			price.metadata._internal_type === addon.type,
 		) || await this.stripe.prices.create({
 			unit_amount: priceCents,
@@ -863,15 +909,18 @@ export class StripeAddons {
 			metadata: {
 				_internal_type: addon.type,
 				_internal_id: addon.addonId,
+				_internal_which: 'addon',
 			},
 		}).catch(() => null);
 
-		const newYearlyPrice = allPrices.data.find((price) =>
+		const newYearlyPrice = allPrices.find((price) =>
 			price.active === true &&
 			price.currency === currency &&
 			price.unit_amount === priceCents * 10 &&
 			price.recurring?.interval === 'year' &&
+			price.product === addon.stripeProductId &&
 			price.metadata._internal_id === addonId &&
+			price.metadata._internal_which === 'addon' &&
 			price.metadata._internal_type === addon.type,
 		) || await this.stripe.prices.create({
 			unit_amount: priceCents * 10,
@@ -885,20 +934,21 @@ export class StripeAddons {
 			metadata: {
 				_internal_type: addon.type,
 				_internal_id: addon.addonId,
+				_internal_which: 'addon',
 			},
 		}).catch(() => null);
 
 		if (!newMonthlyPrice || !newYearlyPrice) throw new Error('Failed to create or update prices for addon.');
 
 		await this.stripe.products.update(addon.stripeProductId, { default_price: newMonthlyPrice.id });
-		if (newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
-		if (newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
+		if (monthlyPrice && newMonthlyPrice.id !== monthlyPrice.id) await this.stripe.prices.update(monthlyPrice.id, { active: false });
+		if (yearlyPrice && newYearlyPrice.id !== yearlyPrice.id) await this.stripe.prices.update(yearlyPrice.id, { active: false });
 
 		return true;
 	}
 
-	private async deleteAddon(addonId: string): Promise<boolean> {
-		const addons = await this.getStripeAddons();
+	private async deleteAddon(addonId: string, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<boolean> {
+		const addons = await this.getStripeAddonsInternal(true, allProducts, allPrices);
 		const addon = addons.find((addon) => addon.addonId === addonId);
 		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#3).`);
 
@@ -918,36 +968,38 @@ export class StripeAddons {
 	}
 
 	public async syncOrCreateAddons(): Promise<void> {
-		const stripeAddons = await this.getStripeAddons();
+		const allProducts = await this.manager.stripeManager.internalGetAllProducts();
+		const allPrices = await this.manager.stripeManager.internalGetAllPrices();
+
+		const stripeAddons = await this.getStripeAddonsInternal(true, allProducts, allPrices);
 		const stripeAddonIds = stripeAddons.map((addon) => addon.addonId);
 
 		const missingAddons = this.manager.config.addons.filter((addon) => !stripeAddonIds.includes(addon.addonId));
 		const foundAddons = this.manager.config.addons.filter((addon) => stripeAddonIds.includes(addon.addonId));
-		const extraAddons = stripeAddons.filter((addon) => !this.manager.config.addons.some((a) => a.addonId === addon.addonId));
+		const extraAddons = stripeAddons.filter((addon) => !this.manager.config.addons.some((a) => a.addonId === addon.addonId) && addon.isActive);
 
-		await this.createMissingAddons(missingAddons);
-		await this.updateExistingAddons(foundAddons, stripeAddons);
+		await this.createMissingAddons(missingAddons, allProducts, allPrices);
+		await this.updateExistingAddons(foundAddons, stripeAddons, allProducts, allPrices);
+		await this.deleteExtraAddons(extraAddons, allProducts, allPrices);
+	}
 
-		if (this.manager.config.options?.stripe?.deleteUnknownTiers) {
-			await this.deleteExtraAddons(extraAddons);
+	private async createMissingAddons(missingAddons: Addon[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
+		for await (const addon of missingAddons) {
+			await this.createAddon(addon, allProducts, allPrices).catch(() => null);
 		}
 	}
 
-	private async createMissingAddons(missingAddons: Addon[]): Promise<void> {
-		await Promise.allSettled(missingAddons.map((addon) => this.createAddon(addon)));
-	}
-
-	private async updateExistingAddons(foundAddons: Addon[], stripeAddons: StripeAddon[]): Promise<void> {
+	private async updateExistingAddons(foundAddons: Addon[], stripeAddons: StripeAddon[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
 		for (const addon of foundAddons) {
 			const stripeAddon = stripeAddons.find((a) => a.addonId === addon.addonId);
 			if (!stripeAddon) continue;
 
 			if (stripeAddon.priceCents !== addon.priceCents) {
-				await this.changePrice(addon.addonId, addon.priceCents, addon.currency);
+				await this.changePrice(addon.addonId, addon.priceCents, addon.currency || 'usd', allProducts, allPrices);
 			}
 
 			if (stripeAddon.isActive !== addon.isActive) {
-				await this.changeActiveState(addon.addonId, addon.isActive);
+				await this.changeActiveState(addon.addonId, addon.isActive, allProducts);
 			}
 
 			if (stripeAddon.name !== addon.name) {
@@ -961,14 +1013,17 @@ export class StripeAddons {
 					metadata: {
 						_internal_type: addon.type,
 						_internal_id: addon.addonId,
+						_internal_which: 'addon',
 					},
 				});
 			}
 		}
 	}
 
-	private async deleteExtraAddons(extraAddons: StripeAddon[]): Promise<void> {
-		await Promise.allSettled(extraAddons.map((addon) => this.deleteAddon(addon.addonId)));
+	private async deleteExtraAddons(extraAddons: StripeAddon[], allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<void> {
+		for await (const addon of extraAddons) {
+			await this.deleteAddon(addon.addonId, allProducts, allPrices).catch(() => null);
+		}
 	}
 
 	public async getAddonsFromItems(items: Stripe.SubscriptionItem[], stripeAddons?: StripeAddon[]): Promise<WithQuantity<StripeAddon>[]> {
@@ -1079,12 +1134,17 @@ export class StripeSubscriptions {
 
 		const tierData = stripeTiers.find((tier) => tier.tierId === data.tierId);
 		if (!tierData) throw new Error(`Tier not found for ID ${data.tierId} (#4).`);
+		else if (tierData.priceCents === 0) throw new Error('Tiers with a price of 0 cannot be subscribed to.');
+		else if (!tierData.isActive) throw new Error('Tier is not active.');
+		else if (data.addons?.some((addon) => addon.quantity < 1)) throw new Error('Addon quantities must be at least 1.');
 
 		const joinIfExists = (s1: string | null, s2: string) => s1 ? `${s1}${s2}` : `https://example.com/checkout${s2}`;
 
 		switch (tierData.type) {
 			case 'user': {
-				const isAnyAddonNotUser = data.addons?.some((addon) => addon.type !== 'user');
+				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
+
+				const isAnyAddonNotUser = stripeAddons?.some((addon) => addon.type !== 'user');
 				if (isAnyAddonNotUser) throw new Error('User subscriptions cannot have guild addons.');
 				else if (data.guildId) throw new Error('User subscriptions cannot be created for guilds.');
 
@@ -1101,11 +1161,10 @@ export class StripeSubscriptions {
 					quantity: 1,
 				}];
 
-				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
-
 				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId} (#4).`);
+					else if (addonData.priceCents === 0) throw new Error(`Addons with a price of 0 cannot be subscribed to (${addon.addonId}) (#1).`);
 
 					lineItems.push({
 						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
@@ -1150,7 +1209,9 @@ export class StripeSubscriptions {
 				return session;
 			}
 			case 'guild': {
-				const isAnyAddonNotGuild = data.addons?.some((addon) => addon.type !== 'guild');
+				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
+
+				const isAnyAddonNotGuild = stripeAddons?.some((addon) => addon.type !== 'guild');
 				if (isAnyAddonNotGuild) throw new Error('Guild subscriptions cannot have user addons.');
 				else if (!data.guildId) throw new Error('Guild subscriptions must be created for guilds.');
 
@@ -1167,11 +1228,10 @@ export class StripeSubscriptions {
 					quantity: 1,
 				}];
 
-				const stripeAddons = data.addons?.length ? await this.stripeManager.addons.getStripeAddons() : [];
-
 				for (const addon of data.addons || []) {
 					const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
 					if (!addonData) throw new Error(`Addon not found for ID ${addon.addonId} (#5).`);
+					else if (addonData.priceCents === 0) throw new Error(`Addons with a price of 0 cannot be subscribed to (${addon.addonId}) (#2).`);
 
 					lineItems.push({
 						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,

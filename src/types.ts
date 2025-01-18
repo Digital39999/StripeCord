@@ -175,7 +175,7 @@ export type SubscriptionCreateInputData = {
 	guildId?: string;
 	guildName?: string;
 
-	addons?: WithQuantity<Pick<Addon, 'addonId' | 'type'>>[];
+	addons?: WithQuantity<Pick<Addon, 'addonId'>>[];
 	trialEndsAt?: Date;
 
 	metadata?: Record<string, string>;

@@ -500,7 +500,7 @@ export class StripeTiers {
 		} else if (!product.active) {
 			await this.stripe.products.update(product.id, { active: true, name: data.name });
 
-			const productPrices = allPrices.filter((price) => price.product === product!.id);
+			const productPrices = allPrices.filter((price) => price.product === product!.id).filter((price) => price.active === false);
 			for await (const price of productPrices) await this.stripe.prices.update(price.id, { active: true });
 		} else if (product.name !== data.name) {
 			await this.stripe.products.update(product.id, { name: data.name });
@@ -587,6 +587,14 @@ export class StripeTiers {
 		else if (tier.isActive === isActive) return true;
 
 		await this.stripe.products.update(tier.stripeProductId, {
+			active: isActive,
+		});
+
+		await this.stripe.prices.update(tier.monthyPriceId, {
+			active: isActive,
+		});
+
+		await this.stripe.prices.update(tier.yearlyPriceId, {
 			active: isActive,
 		});
 
@@ -793,7 +801,7 @@ export class StripeAddons {
 		} else if (!product.active) {
 			await this.stripe.products.update(product.id, { active: true });
 
-			const productPrices = allPrices.filter((price) => price.product === product!.id);
+			const productPrices = allPrices.filter((price) => price.product === product!.id).filter((price) => price.active === false);
 			for await (const price of productPrices) await this.stripe.prices.update(price.id, { active: true });
 		} else if (product.name !== data.name) {
 			await this.stripe.products.update(product.id, { name: data.name });
@@ -879,6 +887,14 @@ export class StripeAddons {
 		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#1).`);
 
 		await this.stripe.products.update(addon.stripeProductId, {
+			active: isActive,
+		});
+
+		await this.stripe.prices.update(addon.monthyPriceId, {
+			active: isActive,
+		});
+
+		await this.stripe.prices.update(addon.yearlyPriceId, {
 			active: isActive,
 		});
 

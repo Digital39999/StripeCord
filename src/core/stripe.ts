@@ -358,6 +358,11 @@ export default class StripeManager {
 					message: 'Missing subscription data.',
 				};
 
+				if (invoice.data.status && ['paid', 'void', 'uncollectible'].includes(invoice.data.status)) return {
+					status: 200,
+					message: 'Invoice resolved.',
+				};
+
 				if (invoice.data.subscription) {
 					const subscription: { data: null | Stripe.Subscription; } = { data: null };
 

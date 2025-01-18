@@ -499,6 +499,9 @@ export class StripeTiers {
 			});
 		} else if (!product.active) {
 			await this.stripe.products.update(product.id, { active: true, name: data.name });
+
+			const productPrices = allPrices.filter((price) => price.product === product!.id);
+			for await (const price of productPrices) await this.stripe.prices.update(price.id, { active: true });
 		} else if (product.name !== data.name) {
 			await this.stripe.products.update(product.id, { name: data.name });
 		}
@@ -789,6 +792,9 @@ export class StripeAddons {
 			});
 		} else if (!product.active) {
 			await this.stripe.products.update(product.id, { active: true });
+
+			const productPrices = allPrices.filter((price) => price.product === product!.id);
+			for await (const price of productPrices) await this.stripe.prices.update(price.id, { active: true });
 		} else if (product.name !== data.name) {
 			await this.stripe.products.update(product.id, { name: data.name });
 		}

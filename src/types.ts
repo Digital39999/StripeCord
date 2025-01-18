@@ -42,14 +42,14 @@ export type Addon = {
 };
 
 export type StripeTier = PremiumTier & {
-	monthyPriceId: string;
+	monthlyPriceId: string;
 	yearlyPriceId: string;
 	stripeProductId: string;
 };
 
 export type StripeAddon = Addon & {
 	yearlyPriceId: string;
-	monthyPriceId: string;
+	monthlyPriceId: string;
 	stripeProductId: string;
 };
 

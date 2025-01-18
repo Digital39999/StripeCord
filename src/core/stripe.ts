@@ -577,7 +577,7 @@ export class StripeTiers {
 				isActive: product.active,
 				priceCents: monthlyPrice.unit_amount ?? 0,
 				stripeProductId: product.id,
-				monthyPriceId: monthlyPrice.id,
+				monthlyPriceId: monthlyPrice.id,
 				yearlyPriceId: yearlyPrice.id,
 			});
 		}
@@ -595,7 +595,7 @@ export class StripeTiers {
 			active: isActive,
 		});
 
-		await this.stripe.prices.update(tier.monthyPriceId, {
+		await this.stripe.prices.update(tier.monthlyPriceId, {
 			active: isActive,
 		});
 
@@ -612,7 +612,7 @@ export class StripeTiers {
 		if (!tier) throw new Error(`Tier not found for ID ${tierId} (#2).`);
 		else if (priceCents === tier.priceCents) return true;
 
-		const monthlyPrice = await this.stripe.prices.retrieve(tier.monthyPriceId).catch(() => null);
+		const monthlyPrice = await this.stripe.prices.retrieve(tier.monthlyPriceId).catch(() => null);
 		const yearlyPrice = await this.stripe.prices.retrieve(tier.yearlyPriceId).catch(() => null);
 
 		const newMonthlyPrice = allPrices.find((price) =>
@@ -683,7 +683,7 @@ export class StripeTiers {
 			active: false,
 		});
 
-		await this.stripe.prices.update(tier.monthyPriceId, {
+		await this.stripe.prices.update(tier.monthlyPriceId, {
 			active: false,
 		});
 
@@ -878,7 +878,7 @@ export class StripeAddons {
 				isActive: product.active,
 				priceCents: monthlyPrice.unit_amount ?? 0,
 				stripeProductId: product.id,
-				monthyPriceId: monthlyPrice.id,
+				monthlyPriceId: monthlyPrice.id,
 				yearlyPriceId: yearlyPrice.id,
 			});
 		}
@@ -895,7 +895,7 @@ export class StripeAddons {
 			active: isActive,
 		});
 
-		await this.stripe.prices.update(addon.monthyPriceId, {
+		await this.stripe.prices.update(addon.monthlyPriceId, {
 			active: isActive,
 		});
 
@@ -912,7 +912,7 @@ export class StripeAddons {
 		if (!addon) throw new Error(`Addon not found for ID ${addonId} (#2).`);
 		else if (priceCents === addon.priceCents) return true;
 
-		const monthlyPrice = await this.stripe.prices.retrieve(addon.monthyPriceId).catch(() => null);
+		const monthlyPrice = await this.stripe.prices.retrieve(addon.monthlyPriceId).catch(() => null);
 		const yearlyPrice = await this.stripe.prices.retrieve(addon.yearlyPriceId).catch(() => null);
 
 		const newMonthlyPrice = allPrices.find((price) =>
@@ -983,7 +983,7 @@ export class StripeAddons {
 			active: false,
 		});
 
-		await this.stripe.prices.update(addon.monthyPriceId, {
+		await this.stripe.prices.update(addon.monthlyPriceId, {
 			active: false,
 		});
 
@@ -1191,7 +1191,7 @@ export class StripeSubscriptions {
 
 				const daysForTrial = data.trialEndsAt ? Math.round((data.trialEndsAt.getTime() - Date.now()) / 86400000) : 0;
 				const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
-					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthyPriceId,
+					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthlyPriceId,
 					quantity: 1,
 				}];
 
@@ -1201,7 +1201,7 @@ export class StripeSubscriptions {
 					else if (addonData.priceCents === 0) throw new Error(`Addons with a price of 0 cannot be subscribed to (${addon.addonId}) (#1).`);
 
 					lineItems.push({
-						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
+						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthlyPriceId,
 						quantity: addon.quantity,
 					});
 				}
@@ -1258,7 +1258,7 @@ export class StripeSubscriptions {
 
 				const daysForTrial = data.trialEndsAt ? Math.round((data.trialEndsAt.getTime() - Date.now()) / 86400000) : 0;
 				const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [{
-					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthyPriceId,
+					price: data.isAnnual ? tierData.yearlyPriceId : tierData.monthlyPriceId,
 					quantity: 1,
 				}];
 
@@ -1268,7 +1268,7 @@ export class StripeSubscriptions {
 					else if (addonData.priceCents === 0) throw new Error(`Addons with a price of 0 cannot be subscribed to (${addon.addonId}) (#2).`);
 
 					lineItems.push({
-						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthyPriceId,
+						price: data.isAnnual ? addonData.yearlyPriceId : addonData.monthlyPriceId,
 						quantity: addon.quantity,
 					});
 				}
@@ -1332,7 +1332,7 @@ export class StripeSubscriptions {
 
 		const newItems: Stripe.SubscriptionUpdateParams.Item[] = [{
 			id: itemThatIsMainTier.id,
-			price: subscription.metadata.isAnnual ? newTierPrice.yearlyPriceId : newTierPrice.monthyPriceId,
+			price: subscription.metadata.isAnnual ? newTierPrice.yearlyPriceId : newTierPrice.monthlyPriceId,
 			quantity: 1,
 		}];
 
@@ -1438,7 +1438,7 @@ export class StripeSubscriptions {
 				});
 			} else {
 				newItems.push({
-					price: subscription.metadata.isAnnual === 'true' ? addonData.yearlyPriceId : addonData.monthyPriceId,
+					price: subscription.metadata.isAnnual === 'true' ? addonData.yearlyPriceId : addonData.monthlyPriceId,
 					quantity: addon.quantity,
 				});
 			}

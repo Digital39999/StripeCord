@@ -71,20 +71,6 @@ export type CustomerUpdateData = {
 	newUserId: string;
 };
 
-export type GetAllCustomersQuery = {
-	email?: string;
-	limit?: number;
-	startingAfter?: string;
-};
-
-export type GetAllSubscriptionsQuery = {
-	customerId?: string;
-	limit?: number;
-	startingAfter?: string;
-};
-
-export type GetAllInvoicesQuery = GetAllSubscriptionsQuery;
-
 export type ManagerEvents = {
 	'subscriptionCreate': [data: SubscriptionCreateData];
 	'subscriptionCancel': [data: SubscriptionCancelData];

@@ -1,4 +1,4 @@
-import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, GetAllCustomersQuery, GetAllInvoicesQuery, GetAllSubscriptionsQuery, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
 import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
 import { stringifyError } from '../utils';
@@ -1102,11 +1102,26 @@ export class StripeAddons {
 export class StripeSubscriptions {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe, private readonly stripeManager: StripeManager) { }
 
+	public async getAllSubscriptions(options?: Stripe.SubscriptionListParams): Promise<Stripe.Subscription[]> {
+		const subscriptions = await this.internalGetAllSubscriptions(options);
+		if (!subscriptions) return [];
+
+		return subscriptions;
+	}
+
+	private async internalGetAllSubscriptions(options?: Stripe.SubscriptionListParams, acc: Stripe.Subscription[] = [], startingAfter?: string): Promise<Stripe.Subscription[]> {
+		const subs = await this.stripe.subscriptions.list({ ...options, limit: 100, starting_after: startingAfter });
+		acc.push(...subs.data);
+
+		if (subs.has_more) return this.internalGetAllSubscriptions(options, acc, subs.data[subs.data.length - 1]?.id);
+		else return acc;
+	}
+
 	public async getSubscriptionsFor(options: CustomerQueryData): Promise<{ user: Stripe.Subscription | null; guild: Stripe.Subscription[]; }> {
 		const customer = await this.stripeManager.customers.getCustomer(options);
 		if (!customer) throw new Error('Failed to get customer.');
 
-		const subscriptions = await this.getAllSubscriptions({ customerId: customer.id });
+		const subscriptions = await this.internalGetAllSubscriptions({ customer: customer.id });
 		if (!subscriptions) return { user: null, guild: [] };
 
 		return {
@@ -1121,16 +1136,8 @@ export class StripeSubscriptions {
 	}
 
 	public async getGuildSubscription({ guildId }: { guildId: string; }): Promise<Stripe.Subscription | null> {
-		const subscriptions = await this.getAllSubscriptions({});
+		const subscriptions = await this.internalGetAllSubscriptions();
 		return subscriptions.find((sub) => sub.metadata.guildId === guildId) || null;
-	}
-
-	public async getAllSubscriptions({ customerId, limit = 100, startingAfter }: GetAllSubscriptionsQuery): Promise<Stripe.Subscription[]> {
-		const subscriptions = await this.stripe?.subscriptions.list({ customer: customerId, limit, starting_after: startingAfter });
-
-		if (!subscriptions) return [];
-		else if (subscriptions.has_more) return [...(subscriptions.data || []), ...(await this.getAllSubscriptions({ customerId, limit, startingAfter: subscriptions.data[subscriptions.data.length - 1]?.id }) || [])];
-		else return subscriptions.data || [];
 	}
 
 	public async cancelSubscription(subscriptionId: string, immediately = false): Promise<boolean> {
@@ -1500,6 +1507,21 @@ export class StripeSubscriptions {
 export class StripeCustomers {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
+	public async getAllCustomers(options?: Stripe.CustomerListParams): Promise<Stripe.Customer[]> {
+		const customers = await this.internalGetAllCustomers(options);
+		if (!customers) return [];
+
+		return customers;
+	}
+
+	private async internalGetAllCustomers(options?: Stripe.CustomerListParams, acc: Stripe.Customer[] = [], startingAfter?: string): Promise<Stripe.Customer[]> {
+		const customers = await this.stripe.customers.list({ ...options, limit: 100, starting_after: startingAfter });
+		acc.push(...customers.data);
+
+		if (customers.has_more) return this.internalGetAllCustomers(options, acc, customers.data[customers.data.length - 1]?.id);
+		else return acc;
+	}
+
 	public async createCustomer(data: CustomerCreateData): Promise<Stripe.Customer> {
 		const check = await this.getCustomer(data);
 		if (check) return check;
@@ -1518,7 +1540,7 @@ export class StripeCustomers {
 
 		if ('customerId' in data) customer = await this.stripe.customers.retrieve(data.customerId).catch(() => null) || null;
 		else if ('email' in data && 'userId' in data) {
-			const customers = await this.getAllCustomers({ email: data.email });
+			const customers = await this.internalGetAllCustomers({ email: data.email });
 			customer = customers?.find((c) => c.metadata.userId === data.userId) || null;
 		}
 
@@ -1530,14 +1552,6 @@ export class StripeCustomers {
 		const customer = await this.getCustomer(data);
 		if (customer) return customer;
 		else return await this.createCustomer(data);
-	}
-
-	public async getAllCustomers({ email, limit = 100, startingAfter }: GetAllCustomersQuery): Promise<Stripe.Customer[]> {
-		const customers = await this.stripe.customers.list({ email, limit, starting_after: startingAfter });
-
-		if (!customers) return [];
-		else if (customers.has_more) return [...(customers.data || []), ...(await this.getAllCustomers({ email, limit, startingAfter: customers.data[customers.data.length - 1]?.id }) || [])];
-		else return customers.data || [];
 	}
 
 	public async updateCustomer(data: CustomerQueryData, toUpdate: CustomerUpdateData): Promise<Stripe.Customer> {
@@ -1580,19 +1594,19 @@ export class StripeCustomers {
 		return paymentMethods.data || [];
 	}
 
+	private async getAllInvoicesInternal(options?: Stripe.InvoiceListParams, acc: Stripe.Invoice[] = [], startingAfter?: string): Promise<Stripe.Invoice[]> {
+		const invoices = await this.stripe.invoices.list({ ...options, limit: 100, starting_after: startingAfter });
+		acc.push(...invoices.data);
+
+		if (invoices.has_more) return this.getAllInvoicesInternal(options, acc, invoices.data[invoices.data.length - 1]?.id);
+		else return acc;
+	}
+
 	public async getCustomerInvoices(data: CustomerQueryData): Promise<Stripe.Invoice[]> {
 		const customer = await this.getCustomer(data);
 		if (!customer) throw new Error('Customer not found.');
 
-		return await this.getAllInvoices({ customerId: customer.id });
-	}
-
-	public async getAllInvoices({ customerId, limit = 100, startingAfter }: GetAllInvoicesQuery): Promise<Stripe.Invoice[]> {
-		const invoices = await this.stripe.invoices.list({ customer: customerId, limit, starting_after: startingAfter });
-
-		if (!invoices) return [];
-		else if (invoices.has_more) return [...(invoices.data || []), ...(await this.getAllInvoices({ customerId, limit, startingAfter: invoices.data[invoices.data.length - 1]?.id }) || [])];
-		else return invoices.data || [];
+		return await this.getAllInvoicesInternal({ customer: customer.id });
 	}
 
 	public async createChangePaymentMethodSession(data: CustomerQueryData): Promise<Stripe.BillingPortal.Session> {

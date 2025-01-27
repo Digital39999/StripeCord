@@ -1279,8 +1279,8 @@ export class StripeSubscriptions {
 					client_reference_id: customer.metadata.userId,
 					allow_promotion_codes: true,
 					line_items: lineItems,
-					success_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=true&userId=${customer.metadata.userId}`),
-					cancel_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=false&userId=${customer.metadata.userId}`),
+					success_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=true&userId=${customer.metadata.userId}&guildId=${data.guildId}`),
+					cancel_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=false&userId=${customer.metadata.userId}&guildId=${data.guildId}`),
 					subscription_data: {
 						description: `Subscription for ${data.guildName ? data.guildName : `guild ${data.guildId}`}.`,
 						trial_period_days: daysForTrial || undefined,

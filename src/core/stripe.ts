@@ -491,6 +491,8 @@ export class StripeTiers {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
 	private async createTier(data: PremiumTier, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<Stripe.Product> {
+		if (data.priceCents <= 0) throw new Error(`Invalid price for tier ${data.tierId}: ${data.priceCents}.`);
+
 		let product = allProducts.find((p) => p.metadata._internal_id === data.tierId && p.metadata._internal_type === data.type && p.metadata._internal_which === 'tier');
 
 		if (!product) {
@@ -792,6 +794,8 @@ export class StripeAddons {
 	constructor (private readonly manager: PremiumManager, private readonly stripe: Stripe) { }
 
 	private async createAddon(data: Addon, allProducts: Stripe.Product[], allPrices: Stripe.Price[]): Promise<Stripe.Product> {
+		if (data.priceCents <= 0) throw new Error(`Invalid price for addon ${data.addonId}: ${data.priceCents}.`);
+
 		let product = allProducts.find((p) => p.metadata._internal_id === data.addonId && p.metadata._internal_type === data.type && p.metadata._internal_which === 'addon');
 
 		if (!product) {

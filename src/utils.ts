@@ -8,3 +8,7 @@ export function stringifyError<T>(error: T): unknown {
 		return error;
 	}
 }
+
+export function getYearlyMultiplier(times?: number): number {
+	return (times || 0) < 1 ? 10 : times || 10;
+}

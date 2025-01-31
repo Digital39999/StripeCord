@@ -1,7 +1,7 @@
 import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { getYearlyMultiplier, stringifyError } from '../utils';
 import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
-import { stringifyError } from '../utils';
 import Stripe from 'stripe';
 
 export default class StripeManager {
@@ -612,7 +612,7 @@ export class StripeTiers {
 		};
 
 		const monthlyPrice = await createOrUpdatePrice('month', data.priceCents).catch(() => null);
-		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * 10).catch(() => null);
+		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * getYearlyMultiplier(data.yearlyMultiplier)).catch(() => null);
 		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to create or update prices for tier.');
 
 		await this.stripe.products.update(product.id, { default_price: monthlyPrice.id });
@@ -719,13 +719,13 @@ export class StripeTiers {
 			price.active === true &&
 			price.currency === currency &&
 			price.recurring?.interval === 'year' &&
-			price.unit_amount === priceCents * 10 &&
+			price.unit_amount === priceCents * getYearlyMultiplier(tier.yearlyMultiplier) &&
 			price.product === tier.stripeProductId &&
 			price.metadata._internal_id === tierId &&
 			price.metadata._internal_which === 'tier' &&
 			price.metadata._internal_type === tier.type,
 		) || await this.stripe.prices.create({
-			unit_amount: priceCents * 10,
+			unit_amount: priceCents * getYearlyMultiplier(tier.yearlyMultiplier),
 			currency: currency ?? 'usd',
 			product: tier.stripeProductId,
 			active: true,
@@ -915,7 +915,7 @@ export class StripeAddons {
 		};
 
 		const monthlyPrice = await createOrUpdatePrice('month', data.priceCents).catch(() => null);
-		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * 10).catch(() => null);
+		const yearlyPrice = await createOrUpdatePrice('year', data.priceCents * getYearlyMultiplier(data.yearlyMultiplier)).catch(() => null);
 		if (!monthlyPrice || !yearlyPrice) throw new Error('Failed to create or update prices for addon.');
 
 		await this.stripe.products.update(product.id, { default_price: monthlyPrice.id });
@@ -1020,14 +1020,14 @@ export class StripeAddons {
 		const newYearlyPrice = allPrices.find((price) =>
 			price.active === true &&
 			price.currency === currency &&
-			price.unit_amount === priceCents * 10 &&
+			price.unit_amount === priceCents * getYearlyMultiplier(addon.yearlyMultiplier) &&
 			price.recurring?.interval === 'year' &&
 			price.product === addon.stripeProductId &&
 			price.metadata._internal_id === addonId &&
 			price.metadata._internal_which === 'addon' &&
 			price.metadata._internal_type === addon.type,
 		) || await this.stripe.prices.create({
-			unit_amount: priceCents * 10,
+			unit_amount: priceCents * getYearlyMultiplier(addon.yearlyMultiplier),
 			currency: currency ?? 'usd',
 			product: addon.stripeProductId,
 			active: true,

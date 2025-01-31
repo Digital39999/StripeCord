@@ -1395,6 +1395,8 @@ export class StripeSubscriptions {
 
 		const newTierPrice = stripeTiers.find((tier) => tier.tierId === newTierId);
 		if (!newTierPrice) throw new Error(`Tier not found for ID ${newTierId} (#5).`);
+		else if (newTierPrice.priceCents === 0) throw new Error('Tiers with a price of 0 cannot be subscribed to.');
+		else if (!newTierPrice.isActive) throw new Error('Tier is not active.');
 
 		const subscriptionType = subscription.metadata.isUserSub === 'true' ? 'user' : 'guild';
 		if (newTierPrice.type !== subscriptionType) throw new Error(`${subscriptionType === 'user' ? 'User' : 'Guild'} subscriptions cannot have tiers for the other type.`);
@@ -1483,6 +1485,9 @@ export class StripeSubscriptions {
 		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId} (#2).`);
 
 		const newSelectedAddons = stripeAddons.filter((addon) => newAddons.some((newAddon) => newAddon.addonId === addon.addonId));
+		if (newSelectedAddons.length !== newAddons.length) throw new Error('Invalid addon IDs provided.');
+		else if (newSelectedAddons.some((addon) => addon.priceCents === 0)) throw new Error('Addons with a price of 0 cannot be subscribed to.');
+		else if (newSelectedAddons.some((addon) => !addon.isActive)) throw new Error('Addons must be active to be subscribed to.');
 
 		const subscriptionType = subscription.metadata.isUserSub === 'true' ? 'user' : 'guild';
 		const isAnyAddonNotCorrectType = newSelectedAddons.some((addon) => addon.type !== subscriptionType);

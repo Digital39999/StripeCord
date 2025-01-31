@@ -367,6 +367,11 @@ export default class StripeManager {
 					message: 'Billing reason ignored.',
 				};
 
+				if (invoice.data.collection_method === 'charge_automatically') return {
+					status: 200,
+					message: 'Invoice is set to charge automatically.',
+				};
+
 				if (!invoice.data.lines.data.some((line) => line.proration)) return {
 					status: 200,
 					message: 'No proration detected.',

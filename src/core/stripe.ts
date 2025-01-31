@@ -1404,9 +1404,10 @@ export class StripeSubscriptions {
 		const itemThatIsMainTier = subscription.items.data.find((item) => item.price.metadata._internal_id === subscription.metadata.tierId);
 		if (!itemThatIsMainTier) throw new Error(`Main tier not found for subscription ${subscriptionId} (#1).`);
 
+		const isAnnual = subscription.metadata.isAnnual === 'true';
 		const newItems: Stripe.SubscriptionUpdateParams.Item[] = [{
 			id: itemThatIsMainTier.id,
-			price: subscription.metadata.isAnnual ? newTierPrice.yearlyPriceId : newTierPrice.monthlyPriceId,
+			price: isAnnual ? newTierPrice.yearlyPriceId : newTierPrice.monthlyPriceId,
 			quantity: 1,
 		}];
 
@@ -1501,6 +1502,7 @@ export class StripeSubscriptions {
 		if (isUnchanged) return true;
 
 		const newItems: Stripe.SubscriptionUpdateParams.Item[] = [{ id: itemThatIsMainTier.id, price: itemThatIsMainTier.price.id, quantity: 1 }];
+		const isAnnual = subscription.metadata.isAnnual === 'true';
 
 		for (const addon of newAddons) {
 			const addonData = stripeAddons.find((a) => a.addonId === addon.addonId);
@@ -1515,7 +1517,7 @@ export class StripeSubscriptions {
 				});
 			} else {
 				newItems.push({
-					price: subscription.metadata.isAnnual === 'true' ? addonData.yearlyPriceId : addonData.monthlyPriceId,
+					price: isAnnual ? addonData.yearlyPriceId : addonData.monthlyPriceId,
 					quantity: addon.quantity,
 				});
 			}

@@ -1227,7 +1227,7 @@ export class StripeSubscriptions {
 		return true;
 	}
 
-	public async changeSubscriptionGuild(subscriptionId: string, newGuildId: string, emitEvents = true): Promise<boolean> {
+	public async changeSubscriptionGuild(subscriptionId: string, newGuildId: string, guildName?: string, emitEvents = true): Promise<boolean> {
 		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
 		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId} (#4).`);
 		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
@@ -1241,6 +1241,7 @@ export class StripeSubscriptions {
 		const oldGuildId = subscription.metadata.guildId;
 
 		await this.stripe.subscriptions.update(subscriptionId, {
+			description: `Subscription for ${guildName || `guild ${newGuildId}`}.`,
 			metadata: {
 				...subscription.metadata,
 				guildId: newGuildId,
@@ -1478,7 +1479,7 @@ export class StripeSubscriptions {
 					success_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=true&userId=${customer.metadata.userId}&guildId=${data.guildId}`),
 					cancel_url: joinIfExists(this.manager.config.options?.stripe?.redirectUrl || null, `?success=false&userId=${customer.metadata.userId}&guildId=${data.guildId}`),
 					subscription_data: {
-						description: `Subscription for ${data.guildName ? data.guildName : `guild ${data.guildId}`}.`,
+						description: `Subscription for ${data.guildName || `guild ${data.guildId}`}.`,
 						trial_period_days: daysForTrial || undefined,
 						trial_settings: daysForTrial ? {
 							end_behavior: {

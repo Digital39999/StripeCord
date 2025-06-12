@@ -1227,6 +1227,66 @@ export class StripeSubscriptions {
 		return true;
 	}
 
+	public async changeSubscriptionGuild(subscriptionId: string, newGuildId: string, emitEvents = true): Promise<boolean> {
+		const subscription = await this.stripe.subscriptions.retrieve(subscriptionId).catch(() => null);
+		if (!subscription) throw new Error(`Subscription not found for ID ${subscriptionId} (#4).`);
+		else if (!subscription.metadata.userId) throw new Error(`Missing user ID in subscription ${subscriptionId}.`);
+		else if (subscription.metadata.isUserSub === 'true') throw new Error('Cannot change guild for user subscriptions.');
+		else if (!subscription.metadata.guildId) throw new Error(`Missing guild ID in subscription ${subscriptionId} (#3).`);
+		else if (subscription.metadata.guildId === newGuildId) return true;
+
+		const existingGuildSub = await this.getGuildSubscription({ guildId: newGuildId });
+		if (existingGuildSub) throw new Error('The new guild already has a subscription.');
+
+		const oldGuildId = subscription.metadata.guildId;
+
+		await this.stripe.subscriptions.update(subscriptionId, {
+			metadata: {
+				...subscription.metadata,
+				guildId: newGuildId,
+			},
+		});
+
+		if (emitEvents) {
+			const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.metadata.tierId);
+			if (!tierData) throw new Error(`Tier not found for ID ${subscription.metadata.tierId} (#6).`);
+
+			const latestInvoice = typeof subscription.latest_invoice === 'string' ? await this.stripe.invoices.retrieve(subscription.latest_invoice) : subscription.latest_invoice;
+			if (!latestInvoice) throw new Error(`Latest invoice not found for subscription ${subscriptionId} (#5).`);
+
+			const addons = await this.manager.stripeManager.addons.getAddonsFromItems(subscription.items.data) ?? [];
+			const isAnnual = subscription.metadata.isAnnual === 'true';
+
+			this.manager.emit('subscriptionDelete', {
+				type: 'guild',
+				tier: tierData,
+
+				userId: subscription.metadata.userId,
+				guildId: oldGuildId,
+
+				isAnnual,
+				addons,
+
+				raw: { subscription },
+			});
+
+			this.manager.emit('subscriptionCreate', {
+				type: 'guild',
+				tier: tierData,
+
+				userId: subscription.metadata.userId,
+				guildId: newGuildId,
+
+				isAnnual,
+				addons,
+
+				raw: { subscription, invoice: latestInvoice },
+			});
+		}
+
+		return true;
+	}
+
 	public async refundCharge(chargeId: string, isFraud = false): Promise<boolean> {
 		const charge = await this.stripe.charges.retrieve(chargeId).catch(() => null);
 		if (!charge) throw new Error(`Charge not found for ID ${chargeId}.`);

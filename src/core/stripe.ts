@@ -1813,7 +1813,7 @@ export class StripeCustomers {
 		return await this.getAllInvoicesInternal({ customer: customer.id });
 	}
 
-	public async createBillpingPortalSession(data: CustomerQueryData, flow: Stripe.BillingPortal.SessionCreateParams.FlowData): Promise<Stripe.BillingPortal.Session> {
+	public async createBillingPortalSession(data: CustomerQueryData, flow: Stripe.BillingPortal.SessionCreateParams.FlowData): Promise<Stripe.BillingPortal.Session> {
 		const customer = await this.getCustomer(data);
 		if (!customer) throw new Error('Customer not found.');
 

@@ -1813,16 +1813,14 @@ export class StripeCustomers {
 		return await this.getAllInvoicesInternal({ customer: customer.id });
 	}
 
-	public async createChangePaymentMethodSession(data: CustomerQueryData): Promise<Stripe.BillingPortal.Session> {
+	public async createBillpingPortalSession(data: CustomerQueryData, flow: Stripe.BillingPortal.SessionCreateParams.FlowData): Promise<Stripe.BillingPortal.Session> {
 		const customer = await this.getCustomer(data);
 		if (!customer) throw new Error('Customer not found.');
 
 		return await this.stripe.billingPortal.sessions.create({
 			customer: customer.id,
 			return_url: this.manager.config.options?.stripe?.redirectUrl,
-			flow_data: {
-				type: 'payment_method_update',
-			},
+			flow_data: flow,
 		});
 	}
 }

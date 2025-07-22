@@ -135,9 +135,8 @@ export type BaseInvoiceEvent<T extends TierType = TierType> = BaseSubscriptionDa
 
 	attemptCount: number;
 	autoHandled: boolean;
-	collectionMethod: CollectionMethod;
 
-	shouldNotifyUser: boolean;
+	collectionMethod: CollectionMethod;
 	hostedUrl: string | null; // The URL for the hosted invoice page, which allows customers to view and pay an invoice. If the invoice has not been finalized yet, this will be null. So fetch the invoice and finalize it if needed.
 
 	raw: {

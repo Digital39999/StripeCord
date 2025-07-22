@@ -380,8 +380,6 @@ export default class StripeManager {
 				const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
 				const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
-				const shouldNotifyUser = invoice.data.status === 'open' && (invoice.data.collection_method === 'send_invoice' || (invoice.data.collection_method === 'charge_automatically' && invoice.data.hosted_invoice_url && !invoice.data.auto_advance));
-
 				const eventData: InvoiceNeedsPayment = {
 					type: subscriptionType,
 					tier: tierData,
@@ -396,7 +394,6 @@ export default class StripeManager {
 					autoHandled: !!invoice.data.auto_advance,
 					collectionMethod: invoice.data.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
 
-					shouldNotifyUser: !!shouldNotifyUser,
 					hostedUrl: invoice.data.hosted_invoice_url ?? null,
 					dueDate: invoice.data.due_date ? new Date(invoice.data.due_date * 1000) : null,
 
@@ -449,8 +446,6 @@ export default class StripeManager {
 					case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
 				}
 
-				const shouldNotifyUser = invoice.data.status === 'open' && (status === PaymentStatus.RequiresAction || (status === PaymentStatus.PaymentFailed && invoice.data.hosted_invoice_url));
-
 				const eventData: InvoicePaymentFailed = {
 					type: subscriptionType,
 					tier: tierData,
@@ -463,9 +458,8 @@ export default class StripeManager {
 
 					attemptCount: invoice.data.attempt_count || 0,
 					autoHandled: !!invoice.data.auto_advance && invoice.data.collection_method === 'charge_automatically',
-					collectionMethod: invoice.data.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
 
-					shouldNotifyUser: !!shouldNotifyUser,
+					collectionMethod: invoice.data.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
 					hostedUrl: invoice.data.hosted_invoice_url ?? null,
 					nextAttempt: invoice.data.next_payment_attempt ? new Date(invoice.data.next_payment_attempt * 1000) : null,
 

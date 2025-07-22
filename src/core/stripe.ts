@@ -1,6 +1,5 @@
-import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, PaymentStatus, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WhatHappened, WithQuantity } from '../types';
 import { getYearlyMultiplier, stringifyError } from '../utils';
-import { PaymentStatus, WhatHappened } from '../enums';
 import { PremiumManager } from './manager';
 import Stripe from 'stripe';
 
@@ -461,7 +460,6 @@ export default class StripeManager {
 					switch (event.type) {
 						case 'invoice.payment_failed': status = PaymentStatus.PaymentFailed; break;
 						case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
-						default: status = PaymentStatus.PendingPayment; break;
 					}
 
 					const eventData = {

@@ -1,4 +1,3 @@
-import { ChargeType, PaymentStatus, WhatHappened } from './enums';
 import Stripe from 'stripe';
 
 export type ConfigType = {
@@ -19,6 +18,25 @@ export type ConfigType = {
 		};
 	};
 };
+
+export enum ChargeType {
+	Immediate = 'immediate',
+	EndOfPeriod = 'endOfPeriod',
+	SendInvoice = 'sendInvoice'
+}
+
+export enum WhatHappened {
+	Added = 'added',
+	Removed = 'removed',
+	Updated = 'updated',
+	Nothing = 'nothing'
+}
+
+export enum PaymentStatus {
+	PaymentFailed = 'paymentFailed',
+	RequiresAction = 'requiresAction',
+	PendingPayment = 'pendingPayment',
+}
 
 export type TierType = 'guild' | 'user';
 export type ManagerEventTypes = keyof ManagerEvents;

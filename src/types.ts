@@ -126,6 +126,10 @@ export type BaseSubscriptionData<T extends TierType = TierType> = {
 export type InvoiceNeedsPayment<T extends TierType = TierType> = Omit<BaseSubscriptionData<T>, 'tier'> & {
 	status: PaymentStatus;
 	finalTotal: number;
+
+	attemptCount: number;
+	autoHandled: boolean;
+
 	hostedUrl: string | null; // The URL for the hosted invoice page, which allows customers to view and pay an invoice. If the invoice has not been finalized yet, this will be null. So fetch the invoice and finalize it if needed.
 
 	raw: {

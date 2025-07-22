@@ -403,6 +403,10 @@ export default class StripeManager {
 
 						status: PaymentStatus.PendingPayment,
 						finalTotal: invoice.data.total,
+
+						attemptCount: invoice.data.attempt_count,
+						autoHandled: invoice.data.auto_advance ?? false,
+
 						hostedUrl: invoice.data.hosted_invoice_url ?? null,
 
 						userId: subscription.data.metadata.userId,
@@ -470,6 +474,10 @@ export default class StripeManager {
 
 						status: status,
 						finalTotal: invoice.data.total,
+
+						attemptCount: invoice.data.attempt_count,
+						autoHandled: invoice.data.auto_advance ?? false,
+
 						hostedUrl: invoice.data.hosted_invoice_url ?? null,
 
 						userId: subscription.data.metadata.userId,

@@ -1,11 +1,11 @@
-import { ConfigType, ManagerEvents } from '../types';
+import { ConfigType, ManagerEvents } from '../other/types';
 import StripeManager from './stripe';
 import EventEmitter from 'events';
 
 export class PremiumManager extends EventEmitter {
 	public stripeManager: StripeManager;
 
-	constructor(readonly config: ConfigType) {
+	constructor (readonly config: ConfigType) {
 		super();
 
 		this.stripeManager = new StripeManager(this);

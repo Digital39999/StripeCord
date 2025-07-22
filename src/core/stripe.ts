@@ -1,4 +1,4 @@
-import { Addon, AddonUpdateType, ChargeOptions, CustomerCreateData, CustomerQueryData, CustomerUpdateData, PaymentStatus, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WhatHappened, WithQuantity } from '../types';
+import { Addon, AddonUpdateType, ChargeOptions, CollectionMethod, CustomerCreateData, CustomerQueryData, CustomerUpdateData, InvoiceNeedsPayment, InvoicePaymentFailed, PaymentStatus, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WhatHappened, WithQuantity } from '../types';
 import { getYearlyMultiplier, stringifyError } from '../utils';
 import { PremiumManager } from './manager';
 import Stripe from 'stripe';
@@ -350,77 +350,66 @@ export default class StripeManager {
 				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object).catch(() => null);
 				else invoice.data = event.data.object;
 
-				if (!invoice.data || !invoice.data?.subscription) return {
-					status: 400,
-					message: 'Missing subscription data.',
-				};
-
-				if (invoice.data.status && ['paid', 'void', 'uncollectible'].includes(invoice.data.status)) return {
-					status: 200,
-					message: 'Invoice resolved.',
-				};
+				if (!invoice.data || !invoice.data?.subscription) return { status: 400, message: 'Missing subscription data.' };
+				else if (invoice.data.status && ['paid', 'void', 'uncollectible'].includes(invoice.data.status)) return { status: 200, message: 'Invoice already resolved.' };
 
 				const ignoredBillingReasons = ['subscription_create', 'subscription_cycle'];
-				if (invoice.data.billing_reason && ignoredBillingReasons.includes(invoice.data.billing_reason)) return {
-					status: 200,
-					message: 'Billing reason ignored.',
+				if (invoice.data.billing_reason && ignoredBillingReasons.includes(invoice.data.billing_reason)) return { status: 200, message: 'Billing reason ignored.' };
+
+				const needsPayment = invoice.data.status === 'open' && (invoice.data.collection_method === 'send_invoice' || (invoice.data.collection_method === 'charge_automatically' && invoice.data.lines.data.some((line) => line.proration)) || (invoice.data.attempt_count && invoice.data.attempt_count > 0));
+				if (!needsPayment) return { status: 200, message: 'Invoice does not require immediate attention.' };
+
+				const subscription: { data: null | Stripe.Subscription; } = { data: null };
+
+				if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
+				else subscription.data = invoice.data.subscription;
+
+				if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
+				else if (
+					!subscription.data.metadata.tierId ||
+					!subscription.data.metadata.userId ||
+					(
+						!subscription.data.metadata.guildId &&
+						!subscription.data.metadata.isUserSub
+					)
+				) return { status: 400, message: 'Missing metadata in subscription.' };
+
+				const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.data?.metadata.tierId);
+				if (!tierData) return { status: 400, message: `Tier not found for ID ${subscription.data.metadata.tierId} locally.` };
+
+				const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
+				const subscriptionType = isUserSubscription ? 'user' : 'guild';
+
+				const shouldNotifyUser = invoice.data.status === 'open' && (invoice.data.collection_method === 'send_invoice' || (invoice.data.collection_method === 'charge_automatically' && invoice.data.hosted_invoice_url && !invoice.data.auto_advance));
+
+				const eventData: InvoiceNeedsPayment = {
+					type: subscriptionType,
+					tier: tierData,
+
+					isAnnual: subscription.data.metadata.isAnnual === 'true',
+					addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
+
+					status: PaymentStatus.PendingPayment,
+					finalTotal: invoice.data.total,
+
+					attemptCount: invoice.data.attempt_count || 0,
+					autoHandled: !!invoice.data.auto_advance,
+					collectionMethod: invoice.data.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
+
+					shouldNotifyUser: !!shouldNotifyUser,
+					hostedUrl: invoice.data.hosted_invoice_url ?? null,
+					dueDate: invoice.data.due_date ? new Date(invoice.data.due_date * 1000) : null,
+
+					userId: subscription.data.metadata.userId,
+					guildId: subscription.data.metadata.guildId ?? null,
+
+					raw: {
+						subscription: subscription.data,
+						invoice: invoice.data,
+					},
 				};
 
-				if (invoice.data.collection_method === 'charge_automatically') return {
-					status: 200,
-					message: 'Invoice is set to charge automatically.',
-				};
-
-				if (!invoice.data.lines.data.some((line) => line.proration)) return {
-					status: 200,
-					message: 'No proration detected.',
-				};
-
-				if (invoice.data.subscription) {
-					const subscription: { data: null | Stripe.Subscription; } = { data: null };
-
-					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
-					else subscription.data = invoice.data.subscription;
-
-					if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
-					else if (
-						!subscription.data.metadata.tierId ||
-						!subscription.data.metadata.userId ||
-						(
-							!subscription.data.metadata.guildId &&
-							!subscription.data.metadata.isUserSub
-						)
-					) return { status: 400, message: 'Missing metadata in subscription.' };
-
-					const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
-					const subscriptionType = isUserSubscription ? 'user' : 'guild';
-
-					const eventData = {
-						type: subscriptionType,
-
-						isAnnual: subscription.data.metadata.isAnnual === 'true',
-						addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
-
-						status: PaymentStatus.PendingPayment,
-						finalTotal: invoice.data.total,
-
-						attemptCount: invoice.data.attempt_count,
-						autoHandled: invoice.data.auto_advance ?? false,
-
-						hostedUrl: invoice.data.hosted_invoice_url ?? null,
-
-						userId: subscription.data.metadata.userId,
-						guildId: subscription.data.metadata.guildId ?? null,
-
-						raw: {
-							subscription: subscription.data,
-							invoice: invoice.data,
-						},
-					} as const;
-
-					this.manager.emit('invoiceNeedsPayment', eventData);
-				}
-
+				this.manager.emit('invoiceNeedsPayment', eventData);
 				break;
 			}
 			case 'invoice.payment_failed':
@@ -430,68 +419,66 @@ export default class StripeManager {
 				if (typeof event.data.object === 'string') invoice.data = await this.stripe.invoices.retrieve(event.data.object).catch(() => null);
 				else invoice.data = event.data.object;
 
-				if (!invoice.data || !invoice.data?.subscription) return {
-					status: 400,
-					message: 'Missing subscription data.',
-				};
+				if (!invoice.data || !invoice.data?.subscription) return { status: 400, message: 'Missing subscription data.' };
+				else if (invoice.data.status && ['paid', 'void', 'uncollectible'].includes(invoice.data.status)) return { status: 200, message: 'Invoice already resolved.' };
 
-				if (invoice.data.status && ['paid', 'void', 'uncollectible'].includes(invoice.data.status)) return {
-					status: 200,
-					message: 'Invoice resolved.',
-				};
+				const subscription: { data: null | Stripe.Subscription; } = { data: null };
 
-				if (invoice.data.subscription) {
-					const subscription: { data: null | Stripe.Subscription; } = { data: null };
+				if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
+				else subscription.data = invoice.data.subscription;
 
-					if (typeof invoice.data.subscription === 'string') subscription.data = await this.stripe.subscriptions.retrieve(invoice.data.subscription).catch(() => null);
-					else subscription.data = invoice.data.subscription;
+				if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
+				else if (
+					!subscription.data.metadata.tierId ||
+					!subscription.data.metadata.userId ||
+					(
+						!subscription.data.metadata.guildId &&
+						!subscription.data.metadata.isUserSub
+					)
+				) return { status: 400, message: 'Missing metadata in subscription.' };
 
-					if (!subscription.data) return { status: 400, message: 'Failed to retrieve subscription data.' };
-					else if (
-						!subscription.data.metadata.tierId ||
-						!subscription.data.metadata.userId ||
-						(
-							!subscription.data.metadata.guildId &&
-							!subscription.data.metadata.isUserSub
-						)
-					) return { status: 400, message: 'Missing metadata in subscription.' };
+				const tierData = this.manager.config.premiumTiers.find((tier) => tier.tierId === subscription.data?.metadata.tierId);
+				if (!tierData) return { status: 400, message: `Tier not found for ID ${subscription.data.metadata.tierId} locally (#5).` };
 
-					const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
-					const subscriptionType = isUserSubscription ? 'user' : 'guild';
+				const isUserSubscription = subscription.data.metadata.isUserSub === 'true';
+				const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
-					let status: PaymentStatus;
-
-					switch (event.type) {
-						case 'invoice.payment_failed': status = PaymentStatus.PaymentFailed; break;
-						case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
-					}
-
-					const eventData = {
-						type: subscriptionType,
-
-						isAnnual: subscription.data.metadata.isAnnual === 'true',
-						addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
-
-						status: status,
-						finalTotal: invoice.data.total,
-
-						attemptCount: invoice.data.attempt_count,
-						autoHandled: invoice.data.auto_advance ?? false,
-
-						hostedUrl: invoice.data.hosted_invoice_url ?? null,
-
-						userId: subscription.data.metadata.userId,
-						guildId: subscription.data.metadata.guildId ?? null,
-
-						raw: {
-							subscription: subscription.data,
-							invoice: invoice.data,
-						},
-					} as const;
-
-					this.manager.emit('invoiceNeedsPayment', eventData);
+				let status: PaymentStatus;
+				switch (event.type) {
+					case 'invoice.payment_failed': status = PaymentStatus.PaymentFailed; break;
+					case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
 				}
 
+				const shouldNotifyUser = invoice.data.status === 'open' && (status === PaymentStatus.RequiresAction || (status === PaymentStatus.PaymentFailed && invoice.data.hosted_invoice_url));
+
+				const eventData: InvoicePaymentFailed = {
+					type: subscriptionType,
+					tier: tierData,
+
+					isAnnual: subscription.data.metadata.isAnnual === 'true',
+					addons: await this.addons.getAddonsFromItems(subscription.data.items.data) ?? [],
+
+					status: status,
+					finalTotal: invoice.data.total,
+
+					attemptCount: invoice.data.attempt_count || 0,
+					autoHandled: !!invoice.data.auto_advance && invoice.data.collection_method === 'charge_automatically',
+					collectionMethod: invoice.data.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
+
+					shouldNotifyUser: !!shouldNotifyUser,
+					hostedUrl: invoice.data.hosted_invoice_url ?? null,
+					nextAttempt: invoice.data.next_payment_attempt ? new Date(invoice.data.next_payment_attempt * 1000) : null,
+
+					userId: subscription.data.metadata.userId,
+					guildId: subscription.data.metadata.guildId ?? null,
+
+					raw: {
+						subscription: subscription.data,
+						invoice: invoice.data,
+					},
+				};
+
+				this.manager.emit('invoicePaymentFailed', eventData);
 				break;
 			}
 			case 'radar.early_fraud_warning.created': {

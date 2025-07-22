@@ -38,6 +38,11 @@ export enum PaymentStatus {
 	PendingPayment = 'pendingPayment',
 }
 
+export enum CollectionMethod {
+	ChargeAutomatically = 'chargeAutomatically',
+	SendInvoice = 'sendInvoice',
+}
+
 export type TierType = 'guild' | 'user';
 export type ManagerEventTypes = keyof ManagerEvents;
 
@@ -100,8 +105,10 @@ export type ManagerEvents = {
 	'subscriptionAddonsUpdate': [data: SubscriptionAddonChangeData];
 	'subscriptionRenew': [data: SubscriptionRenewData];
 
-	'unprocessedWebhook': [data: unknown];
 	'invoiceNeedsPayment': [data: InvoiceNeedsPayment];
+	'invoicePaymentFailed': [data: InvoicePaymentFailed];
+
+	'unprocessedWebhook': [data: unknown];
 	'earlyFraudWarning': [data: Stripe.Radar.EarlyFraudWarning];
 	'disputeWarning': [data: DisputeWarningData];
 	'debug': [message: string];
@@ -123,19 +130,30 @@ export type BaseSubscriptionData<T extends TierType = TierType> = {
 	addons: WithQuantity<StripeAddon>[];
 };
 
-export type InvoiceNeedsPayment<T extends TierType = TierType> = Omit<BaseSubscriptionData<T>, 'tier'> & {
-	status: PaymentStatus;
+export type BaseInvoiceEvent<T extends TierType = TierType> = BaseSubscriptionData<T> & {
 	finalTotal: number;
 
 	attemptCount: number;
 	autoHandled: boolean;
+	collectionMethod: CollectionMethod;
 
+	shouldNotifyUser: boolean;
 	hostedUrl: string | null; // The URL for the hosted invoice page, which allows customers to view and pay an invoice. If the invoice has not been finalized yet, this will be null. So fetch the invoice and finalize it if needed.
 
 	raw: {
 		subscription: Stripe.Subscription;
 		invoice: Stripe.Invoice;
 	};
+};
+
+export type InvoiceNeedsPayment<T extends TierType = TierType> = BaseInvoiceEvent<T> & {
+	status: PaymentStatus.PendingPayment;
+	dueDate: Date | null;
+};
+
+export type InvoicePaymentFailed<T extends TierType = TierType> = BaseInvoiceEvent<T> & {
+	status: PaymentStatus.PaymentFailed | PaymentStatus.RequiresAction;
+	nextAttempt: Date | null;
 };
 
 export type SubscriptionCreateData<T extends TierType = TierType> = BaseSubscriptionData<T> & {

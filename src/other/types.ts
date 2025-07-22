@@ -32,12 +32,6 @@ export enum WhatHappened {
 	Nothing = 'nothing'
 }
 
-export enum PaymentStatus {
-	PaymentFailed = 'paymentFailed',
-	RequiresAction = 'requiresAction',
-	PendingPayment = 'pendingPayment',
-}
-
 export enum CollectionMethod {
 	ChargeAutomatically = 'chargeAutomatically',
 	SendInvoice = 'sendInvoice',
@@ -146,12 +140,10 @@ export type BaseInvoiceEvent<T extends TierType = TierType> = BaseSubscriptionDa
 };
 
 export type InvoiceNeedsPayment<T extends TierType = TierType> = BaseInvoiceEvent<T> & {
-	status: PaymentStatus.PendingPayment;
 	dueDate: Date | null;
 };
 
 export type InvoicePaymentFailed<T extends TierType = TierType> = BaseInvoiceEvent<T> & {
-	status: PaymentStatus.PaymentFailed | PaymentStatus.RequiresAction;
 	nextAttempt: Date | null;
 };
 

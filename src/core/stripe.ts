@@ -1,4 +1,4 @@
-import { Addon, AddonUpdateType, ChargeOptions, CollectionMethod, CustomerCreateData, CustomerQueryData, CustomerUpdateData, InvoiceNeedsPayment, InvoicePaymentFailed, PaymentStatus, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WhatHappened, WithQuantity } from '../other/types';
+import { Addon, AddonUpdateType, ChargeOptions, CollectionMethod, CustomerCreateData, CustomerQueryData, CustomerUpdateData, InvoiceNeedsPayment, InvoicePaymentFailed, PremiumTier, StripeAddon, StripeTier, SubscriptionCreateInputData, WebhookResponse, WhatHappened, WithQuantity } from '../other/types';
 import { getYearlyMultiplier, stringifyError } from '../other/utils';
 import { TimedSet, TimedMap } from '../other/timed';
 import { PremiumManager } from './manager';
@@ -372,7 +372,6 @@ export default class StripeManager {
 					isAnnual: subscription.metadata.isAnnual === 'true',
 					addons: await this.addons.getAddonsFromItems(subscription.items.data) ?? [],
 
-					status: PaymentStatus.PendingPayment,
 					finalTotal: invoice.total,
 
 					attemptCount: invoice.attempt_count || 0,
@@ -417,20 +416,13 @@ export default class StripeManager {
 				const isUserSubscription = subscription.metadata.isUserSub === 'true';
 				const subscriptionType = isUserSubscription ? 'user' : 'guild';
 
-				let status: PaymentStatus;
-				switch (event.type) {
-					case 'invoice.payment_failed': status = PaymentStatus.PaymentFailed; break;
-					case 'invoice.payment_action_required': status = PaymentStatus.RequiresAction; break;
-				}
-
-				const eventData: InvoicePaymentFailed = {
+				const paymentFailedEventData: InvoicePaymentFailed = {
 					type: subscriptionType,
 					tier: tierData,
 
 					isAnnual: subscription.metadata.isAnnual === 'true',
 					addons: await this.addons.getAddonsFromItems(subscription.items.data) ?? [],
 
-					status: status,
 					finalTotal: invoice.total,
 
 					attemptCount: invoice.attempt_count || 0,
@@ -449,7 +441,40 @@ export default class StripeManager {
 					},
 				};
 
-				this.manager.emit('invoicePaymentFailed', eventData);
+				this.manager.emit('invoicePaymentFailed', paymentFailedEventData);
+
+				if (
+					event.type === 'invoice.payment_action_required' ||
+					(invoice.attempt_count === 1 && event.type === 'invoice.payment_failed')
+				) {
+					const needsPaymentEventData: InvoiceNeedsPayment = {
+						type: subscriptionType,
+						tier: tierData,
+
+						isAnnual: subscription.metadata.isAnnual === 'true',
+						addons: await this.addons.getAddonsFromItems(subscription.items.data) ?? [],
+
+						finalTotal: invoice.total,
+
+						attemptCount: invoice.attempt_count || 0,
+						autoHandled: !!invoice.auto_advance && invoice.collection_method === 'charge_automatically',
+						collectionMethod: invoice.collection_method === 'charge_automatically' ? CollectionMethod.ChargeAutomatically : CollectionMethod.SendInvoice,
+
+						hostedUrl: invoice.hosted_invoice_url ?? null,
+						dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
+
+						userId: subscription.metadata.userId,
+						guildId: subscription.metadata.guildId ?? null,
+
+						raw: {
+							subscription: subscription,
+							invoice: invoice,
+						},
+					};
+
+					this.manager.emit('invoiceNeedsPayment', needsPaymentEventData);
+				}
+
 				break;
 			}
 			case 'radar.early_fraud_warning.created': {

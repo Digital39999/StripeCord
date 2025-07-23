@@ -1,6 +1,6 @@
-# Stripecord Documentation
+# StripeCord
 
-**Stripecord**, a powerful package for integrating Stripe with your Discord bot, enabling easy subscription management with premium tiers and add-ons. This package allows you to manage and modify user subscriptions, handle webhooks from Stripe, and streamline the subscription process with add-ons and tier changes.
+**StripeCord**, a powerful package for integrating Stripe with your Discord bot, enabling easy subscription management with premium tiers and add-ons. This package allows you to manage and modify user subscriptions, handle webhooks from Stripe, and streamline the subscription process with add-ons and tier changes.
 
 ---
 

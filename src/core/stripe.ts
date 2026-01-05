@@ -1417,7 +1417,7 @@ export class StripeSubscriptions {
 					},
 					payment_method_options: {
 						card: {
-							request_three_d_secure: 'any',
+							request_three_d_secure: 'automatic',
 						},
 					},
 				});
